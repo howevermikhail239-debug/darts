@@ -12,6 +12,7 @@ import type {
 import { emptyDraft, type VisitDraft } from "../../domain/match/VisitDraft";
 import { scoreOf, type DartThrow } from "../../domain/darts/DartThrow";
 import { isReachableThreeDartScore } from '../../domain/match/aggregateScore';
+import type { SharedCompany } from '../../application/ports/companyGateway';
 
 interface DartsDb extends DBSchema {
   matches: { key: string; value: Match };
@@ -203,7 +204,6 @@ export class IndexedDbPlayerRepository implements PlayerRepository {
   }
 }
 
-export type SharedCompany = Readonly<{ token: string; name: string; createdAt: string }>;
 export type SharedMatchCache = Readonly<{ token: string; match: Match; state: 'pending' | 'synced' | 'error' }>;
 export class IndexedDbSharedRepository {
   async companies(): Promise<readonly SharedCompany[]> {

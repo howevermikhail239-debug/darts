@@ -34,6 +34,7 @@ export type SessionSnapshot = Readonly<{
   isConfirming: boolean;
   notice?: string;
 }>;
+const MAX_UNDO_CHECKPOINTS = 20;
 export class GameSession {
   private draft: VisitDraft = emptyDraft();
   private checkpoints: Match[] = [];
@@ -195,7 +196,7 @@ export class GameSession {
         this.activeRecord(next, nextDraft, previous),
       );
       this.checkpoints.push(previous);
-      if (this.checkpoints.length > 20) this.checkpoints.shift();
+      if (this.checkpoints.length > MAX_UNDO_CHECKPOINTS) this.checkpoints.shift();
       this.match = next;
       this.draft = nextDraft;
       this.notice = undefined;

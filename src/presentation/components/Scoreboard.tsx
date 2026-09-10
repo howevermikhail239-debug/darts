@@ -1,44 +1,33 @@
-import type { Match, Player } from "../../domain/match/models";
-import { statisticsForMatch } from "../../domain/statistics/StatisticsCalculator";
-type Props = { match: Match; players: readonly Player[] };
-export function Scoreboard({ match, players }: Props) {
-  const stats = statisticsForMatch(match);
+import type { ScoreboardRowViewModel } from "../game/gameViewModel";
+type Props = { rows: readonly ScoreboardRowViewModel[] };
+export function Scoreboard({ rows }: Props) {
   return (
     <section
-      className={`scoreboard ${match.players.length > 2 ? "multi" : ""}`}
+      className={`scoreboard ${rows.length > 2 ? "multi" : ""}`}
       aria-label="Счёт игроков"
     >
-      {match.players.map((id, index) => {
-        const player = players.find((p) => p.id === id);
-        const active = index === match.currentPlayerIndex;
-        const score =
-          match.state.kind === "x01"
-            ? match.state.remaining[id]
-            : match.state.totals[id];
-        const last = match.confirmedVisits
-          .filter((v) => v.playerId === id)
-          .at(-1);
+      {rows.map((row) => {
         return (
           <article
-            key={id}
-            className={`player-score ${active ? "active" : ""}`}
-            aria-current={active ? "true" : undefined}
+            key={row.playerId}
+            className={`player-score ${row.active ? "active" : ""}`}
+            aria-current={row.active ? "true" : undefined}
           >
-            {active ? (
+            {row.active ? (
               <span className="turn-mark">● ХОД</span>
             ) : (
               <span className="turn-spacer" />
             )}
             <div className="player-head">
-              <h2>{player?.name ?? "Игрок"}</h2>
+              <h2>{row.name}</h2>
             </div>
-            <div className="main-score">{score ?? 0}</div>
+            <div className="main-score">{row.score}</div>
             <div className="mini-stats">
               <span>
-                Среднее <b>{stats[id]?.averagePerVisit.toFixed(1) ?? "0,0"}</b>
+                Среднее <b>{row.average}</b>
               </span>
               <span>
-                Последний <b>{last?.awardedScore ?? "—"}</b>
+                Последний <b>{row.lastScore}</b>
               </span>
             </div>
           </article>

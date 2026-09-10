@@ -18,6 +18,7 @@ import { DraftPanel } from "../components/DraftPanel";
 import { DartPad } from "../components/DartPad";
 import { t } from "../strings";
 import { draftIsEmpty, isDetailedDraft } from '../../domain/match/VisitDraft';
+import { toGameViewModel } from "../game/gameViewModel";
 type Props = {
   session: GameSession;
   initial: SessionSnapshot;
@@ -83,14 +84,8 @@ export function GamePage({
       setError(e instanceof Error ? e.message : "Ошибка сохранения");
     }
   };
-  const m = snapshot.match;
-  const currentName =
-    players.find((p) => p.id === m.players[m.currentPlayerIndex])?.name ??
-    "Игрок";
-  const awaitingTieDecision =
-    (m.state.kind === "fixed_visits" && m.state.phase.kind === "awaiting_tie_decision") ||
-    (m.state.kind === "x01" && m.state.phase.kind === "awaiting_tie_break");
-  if (m.status === "completed")
+  const view = toGameViewModel(snapshot, players);
+  if (view.completed)
     return (
       <Summary
         snapshot={snapshot}
@@ -115,24 +110,10 @@ export function GamePage({
         </button>
         <div>
           <strong>
-            {m.state.kind === "x01"
-              ? m.state.format.kind === "limited"
-                ? `${m.state.startingScore} · ${m.state.format.visitsPerPlayer} подходов`
-                : `${m.state.startingScore} · до победы`
-              : `Серия · ${m.state.kind === "fixed_visits" ? m.state.visitsPerPlayer : 0} подходов`}
+            {view.title}
           </strong>
           <span>
-            {m.state.kind === "x01"
-              ? m.state.phase.kind === "tie_break"
-                ? `Дополнительный подход ${m.state.phase.round}`
-                : m.state.phase.kind === "awaiting_tie_break"
-                  ? "Ничья по минимальному остатку"
-                  : m.state.format.kind === "limited"
-                    ? `Подход ${Math.min(...Object.values(m.state.visitsCompleted)) + 1} из ${m.state.format.visitsPerPlayer}`
-                    : "Точный выход в 0"
-              : m.state.phase.kind === "extra_round"
-                ? `Дополнительный подход ${m.state.phase.round}`
-                : `Подход ${Math.min(...Object.values(m.state.regulationCompleted)) + 1} из ${m.state.visitsPerPlayer}`}
+            {view.phaseLabel}
           </span>
         </div>
         <button
@@ -148,9 +129,9 @@ export function GamePage({
           ×
         </button>
       </header>
-      <Scoreboard match={m} players={players} />
+      <Scoreboard rows={view.scoreboard} />
       <div className="current-label">
-        ● {t.currentVisit}: <strong>{currentName}</strong>
+        ● {t.currentVisit}: <strong>{view.currentPlayerName}</strong>
       </div>
       <div className="segments input-mode" aria-label="Способ ввода">
         <button type="button" className={isDetailedDraft(snapshot.draft)?'selected':''} onClick={()=>{const discard=!draftIsEmpty(snapshot.draft)&&window.confirm('Текущий незавершённый подход будет сброшен. Переключить способ ввода?');if(!draftIsEmpty(snapshot.draft)&&!discard)return;void session.setInputMode('detailed',discard).then(update).catch(e=>setError(e instanceof Error?e.message:'Ошибка сохранения'));}}>По дротикам</button>
@@ -159,6 +140,8 @@ export function GamePage({
       {!isDetailedDraft(snapshot.draft)?<label className="aggregate-input">Сумма за подход<input type="number" min="0" max="180" step="1" value={snapshot.draft.score??''} onChange={event=>{const value=event.target.value===''?undefined:Number(event.target.value);void session.setAggregateScore(value).then(update).catch(e=>setError(e instanceof Error?e.message:'Ошибка сохранения'));}}/></label>:null}
       <DraftPanel
         snapshot={snapshot}
+        hint={view.draftHint}
+        canConfirm={view.canConfirm}
         selected={selected}
         onSelect={(i) => setSelected(selected === i ? undefined : i)}
         onRemove={() => {
@@ -183,7 +166,7 @@ export function GamePage({
         }}
         onConfirm={() => void confirm()}
       />
-      {awaitingTieDecision ? (
+      {view.awaitingTieDecision ? (
         <div className="tie-panel">
           <h2>{t.draw}</h2>
           <button
@@ -196,7 +179,7 @@ export function GamePage({
           >
             {t.extra}
           </button>
-          {m.state.kind === "fixed_visits" ? <button
+          {view.canCompleteDraw ? <button
               className="secondary"
               onClick={() =>
                 void session.completeDraw().then(update).catch((e) =>
@@ -210,7 +193,7 @@ export function GamePage({
       ) : (
         isDetailedDraft(snapshot.draft)?<DartPad
           multiplier={multiplier}
-          disabled={snapshot.isConfirming || (!snapshot.evaluation.canAddNextDart && selected === undefined)}
+          disabled={!view.canAddNextDart && selected === undefined}
           onMultiplier={setMultiplier}
           onNumber={(n) => void enter(numberThrow(n, multiplier))}
           onBull={(kind) =>
@@ -254,19 +237,16 @@ function Summary({
 }) {
   const [error, setError] = useState<string>();
   const m = snapshot.match;
+  const view = toGameViewModel(snapshot, players);
   const records = m.players.flatMap((playerId) => {
     const player = players.find((item) => item.id === playerId);
     return newRecordsForMatch(m, previousMatches, playerId).map((record) => ({ ...record, playerName: player?.name ?? "Игрок" }));
   });
   return (
     <main className="summary-page">
-      <p className="eyeline">{m.state.kind === "x01" ? m.state.startingScore : "Серия завершена"}</p>
-      <h1>
-        {m.winnerId
-          ? `${players.find((p) => p.id === m.winnerId)?.name} победил${players.find((p) => p.id === m.winnerId)?.name.endsWith("а") ? "а" : ""}`
-          : t.draw}
-      </h1>
-      <Scoreboard match={m} players={players} />
+      <p className="eyeline">{view.summaryEyeline}</p>
+      <h1>{view.summaryTitle}</h1>
+      <Scoreboard rows={view.scoreboard} />
       {records.length > 0 ? <section className="new-records"><h2>🏆 Новый личный рекорд</h2>{records.map((record) => <p key={`${record.playerName}-${record.key}`}><span>{record.playerName} · {record.label}</span><strong>{record.percent ? `${record.value.toFixed(1)}%` : Number.isInteger(record.value) ? record.value : record.value.toFixed(1)}</strong></p>)}</section> : null}
       <section className="summary-actions">
         <button

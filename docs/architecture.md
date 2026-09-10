@@ -2,7 +2,9 @@
 
 ## Границы и направление зависимостей
 
-`presentation → application → domain`. Инфраструктура реализует порты `MatchRepository`, `PlayerRepository` и `SettingsRepository`; конкретные реализации соединяются только в `app/compositionRoot.ts`. ESLint запрещает обратные импорты, а domain не знает о React, браузере или хранении.
+`presentation → application → domain`. Инфраструктура реализует порты `MatchRepository`, `PlayerRepository`, `SettingsRepository` и `CompanyGateway`; конкретные реализации соединяются только в `app/compositionRoot.ts`. ESLint запрещает обратные импорты, а domain не знает о React, браузере или хранении. `CompanySync` зависит от порта, а `HttpCompanyGateway` изолирует HTTP-протокол и `fetch`.
+
+`App.tsx` остаётся composition root интерфейса: выбирает экран и соединяет зависимости с presentation. `useMatchSession` управляет загрузкой и сменой активной сессии, resume и заменой матча; `useCompanySync` управляет локальным bootstrap компании, удалённой синхронизацией, retry и browser `online`. Последний защищает React state от поздних ответов уже покинутой компании. Интерпретация игровых фаз для активного экрана локализована в presentation mapper `gameViewModel`, включая заголовки, доступность действий и строки scoreboard.
 
 ## Предметная модель и инварианты
 

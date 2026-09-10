@@ -2,6 +2,7 @@ import { IndexedDbMatchRepository, IndexedDbPlayerRepository, LocalSettingsRepos
 import { startMatch } from '../application/StartMatch';
 import { exportBackup, restoreBackup } from '../application/BackupService';
 import { CompanySync } from '../application/CompanySync';
+import { HttpCompanyGateway } from '../infrastructure/network/HttpCompanyGateway';
 
 const matches = new IndexedDbMatchRepository();
 const players = new IndexedDbPlayerRepository();
@@ -26,4 +27,4 @@ export const services = {
     return startMatch({ matches, players: participantCatalog, id, now, ...(companyToken ? { companyToken } : {}) }, participants, setup);
   },
 };
-export const companySync = new CompanySync(services.shared);
+export const companySync = new CompanySync(services.shared, new HttpCompanyGateway());
