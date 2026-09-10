@@ -388,7 +388,7 @@ test("finalize archives a completed match and history survives reload", async ({
   await page.getByRole("button", { name: "Сектор 20, множитель 1" }).click();
   await page.getByRole("button", { name: "Подтвердить 40" }).click();
   await expect(page.getByRole("heading", { name: "Игрок 1 победил" })).toBeVisible();
-  await page.getByRole("button", { name: "Завершить" }).click();
+  await page.getByRole("button", { name: "На главную" }).click();
   await expect(page.getByRole("button", { name: "Продолжить" })).toHaveCount(0);
   await page.getByRole("button", { name: "История" }).click();
   await expect(page.getByText("Игрок 1 — Игрок 2")).toBeVisible();
@@ -557,7 +557,7 @@ test("statistics shows confirmed scoring, hits, reload persistence and mobile-sa
   await page.getByRole("button", { name: "Сектор 20, множитель 2" }).click();
   await page.getByRole("button", { name: "Подтвердить 100" }).click();
   await missVisit(page);
-  await page.getByRole("button", { name: "Завершить" }).click();
+  await page.getByRole("button", { name: "На главную" }).click();
   await page.getByRole("button", { name: "Статистика" }).click();
   await page.getByRole("button", { name: /Игрок 1.*Среднее за 3 дротика 100\.0/ }).click();
   await expect(page.getByText("100.0", { exact: true }).first()).toBeVisible();
@@ -577,7 +577,7 @@ test("a second match can reuse saved player ids, announces a real record and pro
   await startOneVisitSeries(page, 2, true);
   await scoringVisit(page, 1);
   await missVisit(page);
-  await page.getByRole("button", { name: "Завершить" }).click();
+  await page.getByRole("button", { name: "На главную" }).click();
 
   await page.getByLabel("Выбрать сохранённого игрока 1").selectOption({ label: "Игрок 1" });
   await page.getByLabel("Выбрать сохранённого игрока 2").selectOption({ label: "Игрок 2" });
@@ -587,9 +587,9 @@ test("a second match can reuse saved player ids, announces a real record and pro
   await page.getByRole("button", { name: "Начать" }).click();
   await scoringVisit(page, 20);
   await missVisit(page);
-  await expect(page.getByRole("heading", { name: "🏆 Новый личный рекорд" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Новый личный рекорд" })).toBeVisible();
   await expect(page.getByText("Игрок 1 · Лучший подход")).toBeVisible();
-  await page.getByRole("button", { name: "Завершить" }).click();
+  await page.getByRole("button", { name: "На главную" }).click();
   await page.getByRole("button", { name: "Статистика" }).click();
   await page.getByRole("button", { name: /Игрок 1/ }).click();
   await page.getByRole("button", { name: "Динамика" }).click();
@@ -606,7 +606,7 @@ test("comparison counts a multiplayer third-player winner as an other-player res
   await missVisit(page);
   await missVisit(page);
   await scoringVisit(page, 20);
-  await page.getByRole("button", { name: "Завершить" }).click();
+  await page.getByRole("button", { name: "На главную" }).click();
   await page.getByRole("button", { name: "Статистика" }).click();
   await page.getByRole("button", { name: "Сравнить игроков" }).click();
   await expect(page.getByRole("heading", { name: "Личные встречи" })).toBeVisible();
@@ -620,7 +620,7 @@ test("player statistics mode filter switches between 501 and scoring series", as
   await startOneVisitSeries(page, 2, true);
   await scoringVisit(page, 1);
   await missVisit(page);
-  await page.getByRole("button", { name: "Завершить" }).click();
+  await page.getByRole("button", { name: "На главную" }).click();
   await page.getByLabel("Выбрать сохранённого игрока 1").selectOption({ label: "Игрок 1" });
   await page.getByLabel("Выбрать сохранённого игрока 2").selectOption({ label: "Игрок 2" });
   await page.getByRole("button", { name: "Начать" }).click();
@@ -720,7 +720,7 @@ test("company match is finalized on device A and contributes to device B history
     await a.getByLabel('Другое количество подходов').fill('1'); await a.getByRole('button', { name: 'Начать' }).click();
     await a.getByRole('button', { name: 'Сектор 20, множитель 1' }).click(); await a.getByRole('button', { name: 'Мимо' }).click(); await a.getByRole('button', { name: 'Мимо' }).click(); await a.getByRole('button', { name: 'Подтвердить 20' }).click();
     for (let dart = 0; dart < 3; dart += 1) await a.getByRole('button', { name: 'Мимо' }).click();
-    await a.getByRole('button', { name: 'Подтвердить 0' }).click(); await a.getByRole('button', { name: 'Завершить' }).click();
+    await a.getByRole('button', { name: 'Подтвердить 0' }).click(); await a.getByRole('button', { name: 'На главную' }).click();
     const b = await deviceB.newPage(); await b.goto(a.url());
     await b.getByRole('button', { name: 'История' }).click(); await expect(b.getByText('Миша — Саша')).toBeVisible();
     await b.getByRole('button', { name: 'Назад' }).click(); await b.getByRole('button', { name: 'Статистика' }).click();
@@ -734,7 +734,7 @@ test("company match is finalized on device A and contributes to device B history
     for (let dart = 0; dart < 3; dart += 1) await b.getByRole('button', { name: 'Мимо' }).click();
     await b.getByRole('button', { name: 'Подтвердить 0' }).click();
     await b.getByRole('button', { name: 'Сектор 20, множитель 1' }).click(); await b.getByRole('button', { name: 'Мимо' }).click(); await b.getByRole('button', { name: 'Мимо' }).click(); await b.getByRole('button', { name: 'Подтвердить 20' }).click();
-    await b.getByRole('button', { name: 'Завершить' }).click();
+    await b.getByRole('button', { name: 'На главную' }).click();
     await a.reload(); await a.getByRole('button', { name: 'История' }).click();
     await expect(a.locator('.history-match')).toHaveCount(2);
     await a.getByRole('button', { name: 'Назад' }).click(); await a.getByRole('button', { name: 'Статистика' }).click();
@@ -758,7 +758,7 @@ test('offline completed company match survives reload and manual retry uploads i
   try {
     const a = await aContext.newPage(); await createCompanyWithPlayers(a, 'Оффлайн лига', ['Миша', 'Саша']); const url = a.url();
     await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await a.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Саша' });
-    await a.route('**/api/**', route => route.abort()); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'Завершить' }).click();
+    await a.route('**/api/**', route => route.abort()); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'На главную' }).click();
     await expect(a.getByRole('status')).toContainText('Нет связи'); await a.reload(); await expect(a.getByText('Компания · Оффлайн лига')).toBeVisible(); await expect(a.getByRole('status')).toContainText('Нет связи');
     await a.unroute('**/api/**'); await a.getByRole('button', { name: 'Повторить' }).click(); await expect(a.getByRole('status')).toContainText('Все матчи синхронизированы');
     const b = await bContext.newPage(); await b.goto(url); await b.getByRole('button', { name: 'История' }).click(); await expect(b.locator('.history-match')).toHaveCount(1);
@@ -781,7 +781,7 @@ test('company match keeps temporary participant out of shared player catalog', a
   const aContext = await browser.newContext(); const bContext = await browser.newContext();
   try {
     const a = await aContext.newPage(); await createCompanyWithPlayers(a, 'Временные', ['Миша']); const url = a.url();
-    await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'Завершить' }).click();
+    await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'На главную' }).click();
     const b = await bContext.newPage(); await b.goto(url); await expect(b.getByLabel('Выбрать сохранённого игрока 1').locator('option')).toHaveCount(2); await b.getByRole('button', { name: 'История' }).click(); await expect(b.getByText('Миша — Игрок 2')).toBeVisible();
   } finally { await aContext.close(); await bContext.close(); }
 });
@@ -925,15 +925,84 @@ test('stage 4 eight-player round keeps active player readable in an internal rai
   for (let count = 2; count < 8; count += 1) await page.getByRole('button', { name: '+ Добавить игрока' }).click();
   for (let index = 1; index <= 8; index += 1) await page.getByLabel(`Имя игрока ${index}`).fill(index % 2 ? `Игрок ${index}` : `Очень длинное имя игрока ${index}`);
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.locator('.player-score')).toHaveCount(8);
+  const originalOrder = await page.locator('.player-score .player-identity-name').allTextContents();
   await expect(page.getByText('Текущий подход: Игрок 1')).toBeVisible();
   for (let player = 2; player <= 8; player += 1) {
     await missVisit(page);
     await expect(page.getByText(`Текущий подход: ${player % 2 ? `Игрок ${player}` : `Очень длинное имя игрока ${player}`}`)).toBeVisible();
+    expect(await page.locator('.player-score .player-identity-name').allTextContents()).toEqual(originalOrder);
+    await expect.poll(async () => { const rail = await page.locator('.scoreboard').boundingBox(), active = await page.locator('.player-score.active').boundingBox(); return Boolean(active && rail && active.x >= rail.x - 1 && active.x + active.width <= rail.x + rail.width + 1); }).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   }
   expect(await page.locator('.scoreboard').evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await page.locator('.scoreboard').evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
   for (const name of ['×1', '×2', '×3', 'Мимо']) {
     const box = await page.getByRole('button', { name, exact: true }).boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
+});
+
+async function activeMatchIdentity(page: import('@playwright/test').Page) {
+  return page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('dart-scorekeeper', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    const active = await new Promise<{ current: { id: string; players: string[]; startingPlayerIndex: number } }>((resolve, reject) => { const request = database.transaction('meta').objectStore('meta').get('activeMatch'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    database.close();
+    return { id: active.current.id, players: active.current.players, starter: active.current.startingPlayerIndex };
+  });
+}
+
+test('Stage 4.5 local rematch starts immediately with a new id, stable profiles and rotated starter', async ({ page }) => {
+  await page.goto('/');
+  await createLocalProfile(page, 'Миша'); await createLocalProfile(page, 'Саша');
+  await startOneVisitSeriesWithProfiles(page, ['Миша', 'Саша']);
+  const first = await activeMatchIdentity(page);
+  await scoringVisit(page, 20); await missVisit(page);
+  await expect(page.getByRole('heading', { name: 'Миша победил' })).toBeVisible();
+  await page.getByRole('button', { name: 'Сыграть ещё раз' }).click();
+  await expect(page.getByText('Текущий подход: Саша')).toBeVisible();
+  const second = await activeMatchIdentity(page);
+  expect(second.id).not.toBe(first.id); expect(second.players).toEqual(first.players); expect(second.starter).toBe(1);
+  await page.getByRole('button', { name: 'На главный экран' }).click(); await page.getByRole('button', { name: 'История' }).click();
+  await expect(page.locator('.history-match')).toHaveCount(1);
+});
+
+test('Stage 4.5 temporary rematch recreates only temporary identity and never creates a statistics profile', async ({ page }) => {
+  await page.goto('/'); await createLocalProfile(page, 'Миша');
+  await page.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' });
+  await oneVisitSeries(page, 20, 0); const first = await activeMatchIdentity(page);
+  await page.getByRole('button', { name: 'Сыграть ещё раз' }).click(); await expect(page.getByText('Текущий подход: Игрок 2')).toBeVisible(); const second = await activeMatchIdentity(page);
+  expect(second.players[0]).toBe(first.players[0]); expect(second.players[1]).not.toBe(first.players[1]);
+  await scoringVisit(page, 20); await missVisit(page);
+  await page.getByRole('button', { name: 'Статистика' }).click();
+  await expect(page.getByRole('heading', { name: 'Миша', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Игрок 2/ })).toHaveCount(0);
+});
+
+test('Stage 4.5 company rematch preserves three shared ids and History can start another rematch', async ({ page }) => {
+  await createCompanyWithPlayers(page, 'Серия клуба', ['Миша', 'Саша', 'Женя']);
+  await page.getByRole('button', { name: '+ Добавить игрока' }).click();
+  for (let index = 1; index <= 3; index += 1) await page.getByLabel(`Выбрать сохранённого игрока ${index}`).selectOption({ label: ['Миша', 'Саша', 'Женя'][index - 1] });
+  await page.getByRole('button', { name: 'Серия' }).click(); await page.getByRole('button', { name: 'Другое' }).click(); await page.getByLabel('Другое количество подходов').fill('1'); await page.getByRole('button', { name: 'Начать' }).click();
+  const first = await activeMatchIdentity(page); await scoringVisit(page, 20); await missVisit(page); await missVisit(page);
+  await page.getByRole('button', { name: 'На главную' }).click(); await page.getByRole('button', { name: 'История' }).click();
+  await page.locator('.history-match').first().getByText('Миша — Саша — Женя').click(); await page.getByRole('button', { name: 'Сыграть ещё раз' }).click();
+  await expect(page.getByText('Текущий подход: Саша')).toBeVisible(); const second = await activeMatchIdentity(page);
+  expect(second.players).toEqual(first.players); expect(second.starter).toBe(1);
+});
+
+test('Stage 4.5 multiplier preview, confirmed 180 celebration, reduced motion and haptics are progressive', async ({ page }) => {
+  await page.addInitScript(() => { const calls: VibratePattern[] = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (pattern: VibratePattern) => { calls.push(pattern); return true; } }); Object.defineProperty(window, '__vibrationCalls', { value: calls }); });
+  await page.goto('/'); await page.getByRole('button', { name: 'Настройки' }).click(); const haptics = page.getByRole('checkbox', { name: /Виброотклик/ }); await expect(haptics).toBeChecked(); await haptics.uncheck(); await expect(haptics).toBeDisabled(); await expect(haptics).toBeEnabled(); await page.reload(); await page.getByRole('button', { name: 'Настройки' }).click(); const restoredHaptics = page.getByRole('checkbox', { name: /Виброотклик/ }); await expect(restoredHaptics).not.toBeChecked(); await restoredHaptics.check(); await expect(restoredHaptics).toBeDisabled(); await expect(restoredHaptics).toBeEnabled();
+  await startOneVisitSeries(page);
+  const sector20 = page.getByRole('button', { name: 'Сектор 20, множитель 1' }); await expect(sector20).toHaveText('20');
+  await page.getByRole('button', { name: '×2' }).click(); await expect(page.getByRole('button', { name: 'Сектор 20, множитель 2' })).toContainText('40');
+  await page.getByRole('button', { name: '×3' }).click(); const triple20 = page.getByRole('button', { name: 'Сектор 20, множитель 3' }); await expect(triple20).toContainText('60');
+  const box = await triple20.boundingBox(); expect(box?.height).toBeGreaterThanOrEqual(44); await triple20.click(); await page.getByRole('button', { name: '×3' }).click(); await page.getByRole('button', { name: 'Сектор 20, множитель 3' }).click(); await page.getByRole('button', { name: '×3' }).click(); await page.getByRole('button', { name: 'Сектор 20, множитель 3' }).click();
+  await expect(page.getByText('МАКСИМУМ', { exact: false })).toHaveCount(0); await page.getByRole('button', { name: 'Подтвердить 180' }).click();
+  await expect(page.getByText(/МАКСИМУМ/)).toBeVisible(); await expect(page.getByText('Текущий подход: Игрок 2')).toBeVisible(); await expect(page.getByRole('button', { name: 'Мимо' })).toBeEnabled();
+  expect(await page.evaluate(() => (window as unknown as { __vibrationCalls: VibratePattern[] }).__vibrationCalls)).toContainEqual([24, 28, 45]);
+  await expect(page.getByText(/МАКСИМУМ/)).toHaveCount(0, { timeout: 2000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.getByRole('button', { name: 'Мимо' }).click();
+  expect(await page.locator('.particles').count()).toBe(0);
 });

@@ -13,6 +13,7 @@ import {
   type StatisticsPeriod,
   type TrendMetric,
 } from "../../domain/statistics/StatisticsCalculator";
+import { PlayerIdentity } from "../components/PlayerIdentity";
 
 type Section = "overview" | "hits" | "distribution" | "trends" | "records";
 const modeLabels: Record<StatisticsMode, string> = { all: "Все", x01: "X01", fixed_visits: "Набор очков" };
@@ -40,7 +41,7 @@ export function StatisticsPage({ matches, players, initialPlayerIds = [], onBack
 }
 
 function Overview({ matches, players, onSelect, onCompare }: { matches: readonly Match[]; players: readonly Player[]; onSelect: (id: PlayerId) => void; onCompare: () => void }) {
-  return <><section className="stats-player-grid" aria-label="Игроки">{players.map((player) => { const stats = statisticsForPlayerHistory(matches, player.id); return <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}><strong>{player.name}</strong><Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} /><Metric label="Лучший подход" value={stats.bestVisit} /><Metric label="Победы" value={pct(stats.winRate)} /><Metric label="180" value={stats.thresholds["180"]} /></button>; })}</section>
+  return <><section className="stats-player-grid" aria-label="Игроки">{players.map((player) => { const stats = statisticsForPlayerHistory(matches, player.id); return <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}><PlayerIdentity playerId={player.id} name={player.name} /><Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} /><Metric label="Лучший подход" value={stats.bestVisit} /><Metric label="Победы" value={pct(stats.winRate)} /><Metric label="180" value={stats.thresholds["180"]} /></button>; })}</section>
     {players.length >= 2 ? <button className="primary stats-compare-action" onClick={onCompare}>Сравнить игроков</button> : null}</>;
 }
 
@@ -51,7 +52,7 @@ function Filters({ mode, period, onMode, onPeriod }: { mode: StatisticsMode; per
 function PlayerDetails({ matches, player, mode, period, onMode, onPeriod, onClose }: { matches: readonly Match[]; player: Player; mode: StatisticsMode; period: StatisticsPeriod; onMode: (value: StatisticsMode) => void; onPeriod: (value: StatisticsPeriod) => void; onClose: () => void }) {
   const [section, setSection] = useState<Section>("overview");
   const stats = useMemo(() => statisticsForPlayerHistory(matches, player.id, mode, period), [matches, player.id, mode, period]);
-  return <><button className="stats-back" onClick={onClose}>← Все игроки</button><h2 className="stats-player-title">{player.name}</h2><Filters mode={mode} period={period} onMode={onMode} onPeriod={onPeriod} />
+  return <><button className="stats-back" onClick={onClose}>← Все игроки</button><h2 className="stats-player-title"><PlayerIdentity playerId={player.id} name={player.name} /></h2><Filters mode={mode} period={period} onMode={onMode} onPeriod={onPeriod} />
     <nav className="stats-tabs" aria-label="Раздел статистики">{(["overview", "hits", "distribution", "trends", "records"] as const).map((key) => <button key={key} className={section === key ? "selected" : ""} onClick={() => setSection(key)}>{({ overview: "Обзор", hits: "Попадания", distribution: "Распределение", trends: "Динамика", records: "Рекорды" } as const)[key]}</button>)}</nav>
     {section === "overview" ? <PlayerOverview stats={stats} /> : section === "hits" ? <Hits stats={stats} /> : section === "distribution" ? <Distribution stats={stats} /> : section === "trends" ? <Trends matches={matches} playerId={player.id} mode={mode} period={period} /> : <Records matches={matches} playerId={player.id} mode={mode} />}
   </>;

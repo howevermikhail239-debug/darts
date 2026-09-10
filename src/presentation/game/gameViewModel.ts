@@ -10,6 +10,9 @@ export type ScoreboardRowViewModel = Readonly<{
   score: number;
   average: string;
   lastScore: number | "—";
+  temporary: boolean;
+  position: number;
+  scoreRevision: string;
 }>;
 
 export type GameViewModel = Readonly<{
@@ -36,7 +39,7 @@ export type GameViewModel = Readonly<{
 const displayName = (match: Match, players: readonly Player[], playerId: PlayerId): string =>
   players.find((player) => player.id === playerId)?.name ?? match.participantNames[playerId] ?? "Игрок";
 
-export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Player[]): GameViewModel {
+export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Player[], persistentPlayerIds: readonly PlayerId[] = players.map((player) => player.id)): GameViewModel {
   const match = snapshot.match;
   const stats = statisticsForMatch(match);
   const currentPlayerId = match.players[match.currentPlayerIndex]!;
@@ -86,6 +89,9 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       score: score ?? 0,
       average: stats[playerId]?.averagePerVisit.toFixed(1) ?? "0,0",
       lastScore: last?.awardedScore ?? "—",
+      temporary: !persistentPlayerIds.includes(playerId),
+      position: index,
+      scoreRevision: last?.id ?? "initial",
     };
   });
   const winnerName = match.winnerId ? displayName(match, players, match.winnerId) : undefined;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   bull,
   miss,
@@ -20,6 +20,9 @@ import { t } from "../strings";
 import { draftIsEmpty, isDetailedDraft } from '../../domain/match/VisitDraft';
 import { toGameViewModel } from "../game/gameViewModel";
 import { Dialog } from "../components/Dialog";
+import { vibrateFor, type HapticEvent } from "../feedback/haptics";
+import { PlayerIdentity } from "../components/PlayerIdentity";
+import { toSummaryViewModel } from "../game/summaryViewModel";
 type PendingDialog = { title: string; description: string; confirmLabel: string; destructive?: boolean; action: () => void };
 type Props = {
   session: GameSession;
@@ -30,6 +33,9 @@ type Props = {
   onBack: () => void;
   onClosed: () => void;
   onStatistics: (match: Match) => Promise<void>;
+  onRematch: (match: Match) => Promise<void>;
+  persistentPlayerIds: readonly string[];
+  hapticsEnabled: boolean;
 };
 export function GamePage({
   session,
@@ -40,12 +46,21 @@ export function GamePage({
   onBack,
   onClosed,
   onStatistics,
+  onRematch,
+  persistentPlayerIds,
+  hapticsEnabled,
 }: Props) {
   const [snapshot, setSnapshot] = useState(initial);
   const [multiplier, setMultiplier] = useState<Multiplier>(1);
   const [selected, setSelected] = useState<number>();
   const [error, setError] = useState<string>();
   const [dialog, setDialog] = useState<PendingDialog>();
+  const [feedback, setFeedback] = useState<{ key: number; kind: HapticEvent; playerName: string }>();
+  useEffect(() => {
+    if (!feedback) return;
+    const timeout = window.setTimeout(() => setFeedback(undefined), feedback.kind === "maximum" ? 1100 : 650);
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
   useWakeLock(snapshot.match.status === "in_progress");
   const update = (s: SessionSnapshot) => {
     setSnapshot(s);
@@ -92,15 +107,24 @@ export function GamePage({
   };
   const confirm = async () => {
     try {
+      const visitCount = snapshot.match.confirmedVisits.length;
+      const playerName = toGameViewModel(snapshot, players, persistentPlayerIds).currentPlayerName;
       const pending = session.confirm();
       update(session.snapshot());
-      update(await pending);
+      const next = await pending;
+      update(next);
+      const visit = next.match.confirmedVisits.length > visitCount ? next.match.confirmedVisits.at(-1) : undefined;
+      if (visit) {
+        const kind: HapticEvent = next.match.status === "completed" ? "win" : visit.result === "bust" ? "bust" : visit.awardedScore === 180 ? "maximum" : "confirm";
+        vibrateFor(kind, hapticsEnabled);
+        setFeedback({ key: Date.now(), kind, playerName });
+      }
     } catch (e) {
       update(session.snapshot());
       setError(e instanceof Error ? e.message : "Ошибка сохранения");
     }
   };
-  const view = toGameViewModel(snapshot, players);
+  const view = toGameViewModel(snapshot, players, persistentPlayerIds);
   if (view.completed)
     return (
       <Summary
@@ -116,6 +140,8 @@ export function GamePage({
           await session.finalize();
           await onStatistics(snapshot.match);
         }}
+        onRematch={() => onRematch(snapshot.match)}
+        persistentPlayers={players.filter((player) => persistentPlayerIds.includes(player.id))}
       />
     );
   return (
@@ -145,6 +171,7 @@ export function GamePage({
         </button>
       </header>
       <Scoreboard rows={view.scoreboard} />
+      {feedback?.kind === "maximum" ? <div key={feedback.key} className="maximum-celebration" role="status" aria-live="polite"><div className="particles" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} />)}</div><strong>180</strong><span>МАКСИМУМ · {feedback.playerName}</span></div> : feedback?.kind === "bust" ? <div key={feedback.key} className="bust-feedback" role="status">Перебор — счёт не изменился</div> : null}
       <div className="current-label">
         ● {t.currentVisit}: <strong>{view.currentPlayerName}</strong>
       </div>
@@ -246,6 +273,8 @@ function Summary({
   onUndo,
   onFinish,
   onStatistics,
+  onRematch,
+  persistentPlayers,
 }: {
   snapshot: SessionSnapshot;
   players: readonly Player[];
@@ -253,13 +282,16 @@ function Summary({
   onUndo: () => Promise<void>;
   onFinish: () => Promise<void>;
   onStatistics: () => Promise<void>;
+  onRematch: () => Promise<void>;
+  persistentPlayers: readonly Player[];
 }) {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const m = snapshot.match;
-  const view = toGameViewModel(snapshot, players);
-  const records = m.players.flatMap((playerId) => {
-    const player = players.find((item) => item.id === playerId);
+  const view = toGameViewModel(snapshot, players, persistentPlayers.map((player) => player.id));
+  const summary = toSummaryViewModel(m, persistentPlayers);
+  const records = m.players.filter((playerId) => persistentPlayers.some((player) => player.id === playerId)).flatMap((playerId) => {
+    const player = persistentPlayers.find((item) => item.id === playerId);
     return newRecordsForMatch(m, previousMatches, playerId).map((record) => ({ ...record, playerName: player?.name ?? "Игрок" }));
   });
   const run = async (action: () => Promise<void>) => {
@@ -277,16 +309,19 @@ function Summary({
   return (
     <main className="summary-page">
       <p className="eyeline">{view.summaryEyeline}</p>
-      <h1>{view.summaryTitle}</h1>
+      <h1>{summary.title}</h1>
+      {summary.winner ? <div className="summary-winner"><PlayerIdentity {...summary.winner} /></div> : <p className="summary-draw">Результат разделили несколько игроков</p>}
+      <section className="summary-facts" aria-label="Главные факты матча">{summary.facts.map((fact) => <article key={fact.label}><span>{fact.label}</span><strong>{fact.value}</strong></article>)}</section>
       <Scoreboard rows={view.scoreboard} />
-      {records.length > 0 ? <section className="new-records"><h2>🏆 Новый личный рекорд</h2>{records.map((record) => <p key={`${record.playerName}-${record.key}`}><span>{record.playerName} · {record.label}</span><strong>{record.percent ? `${record.value.toFixed(1)}%` : Number.isInteger(record.value) ? record.value : record.value.toFixed(1)}</strong></p>)}</section> : null}
+      {summary.maximums > 0 ? <p className="summary-achievement">180 МАКСИМУМ · {summary.maximums}</p> : null}
+      {records.length > 0 ? <section className="new-records"><h2>Новый личный рекорд</h2>{records.map((record) => <p key={`${record.playerName}-${record.key}`}><span>{record.playerName} · {record.label}</span><strong>{record.percent ? `${record.value.toFixed(1)}%` : Number.isInteger(record.value) ? record.value : record.value.toFixed(1)}</strong></p>)}</section> : null}
       <section className="summary-actions">
         <button
           className="primary"
           disabled={busy}
-          onClick={() => void run(onFinish)}
+          onClick={() => void run(onRematch)}
         >
-          {t.finish}
+          Сыграть ещё раз
         </button>
         <button
           className="secondary"
@@ -295,6 +330,7 @@ function Summary({
         >
           Статистика
         </button>
+        <button className="secondary" disabled={busy} onClick={() => void run(onFinish)}>На главную</button>
         <button
           className="secondary"
           disabled={busy}

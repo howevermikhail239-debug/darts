@@ -4,6 +4,7 @@ import type { Match, Player } from "../../domain/match/models";
 import { GameSession, type Clock, type IdGenerator, type SessionSnapshot } from "../../application/GameSession";
 import type { MatchRepository, PlayerRepository } from "../../application/ports/repositories";
 import type { SetupParticipant } from "../pages/SetupPage";
+import { prepareRematch } from "../../application/PrepareRematch";
 
 type ActiveSession = Readonly<{ session: GameSession; snapshot: SessionSnapshot }>;
 type PendingStart = Readonly<{ participants: readonly SetupParticipant[]; setup: MatchSetup }>;
@@ -123,6 +124,24 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     await performStart(requested.participants, requested.setup);
   }, [dependencies, pendingStart, performStart, resume]);
 
+  const rematch = useCallback(async (source: Match, participantCatalog: readonly Player[] = players) => {
+    const request = prepareRematch(source, participantCatalog);
+    const current = active ?? resume;
+    if (current?.snapshot.match.id === source.id) {
+      await current.session.finalize();
+      setHistory(await dependencies.matches.listHistory());
+      await onSessionClosed();
+      await performStart(request.participants, request.setup);
+      return;
+    }
+    if (resume) {
+      setPendingStart(request);
+      onShowHome();
+      return;
+    }
+    await performStart(request.participants, request.setup);
+  }, [active, dependencies, onSessionClosed, onShowHome, performStart, players, resume]);
+
   return {
     loading,
     players,
@@ -141,6 +160,7 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     abandonResume,
     continuePending: continueResume,
     replaceCurrent,
+    rematch,
     cancelPending: () => setPendingStart(undefined),
   };
 }

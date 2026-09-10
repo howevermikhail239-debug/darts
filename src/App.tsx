@@ -11,6 +11,7 @@ import { useMatchSession } from "./presentation/hooks/useMatchSession";
 import { toGameViewModel } from "./presentation/game/gameViewModel";
 import { Dialog } from "./presentation/components/Dialog";
 import { persistentParticipantsInMatch, persistentStatisticsPlayers } from "./presentation/statistics/statisticsCorpus";
+import { usePreferences } from "./presentation/hooks/usePreferences";
 import "./presentation/styles.css";
 import "./presentation/concept-overrides.css";
 import "./presentation/active-game.css";
@@ -43,6 +44,7 @@ export default function App() {
   const showGame = useCallback(() => setScreen("game"), []);
   const showHome = useCallback(() => setScreen("home"), []);
   const company = useCompanySync({ sync: companySync, cache: services.shared });
+  const preferences = usePreferences(services.settings);
   const match = useMatchSession({
     dependencies: services,
     companyToken: company.company?.token,
@@ -75,17 +77,20 @@ export default function App() {
           setStatisticsContext(relevantPlayers);
           setScreen("statistics");
         }}
+        onRematch={(completedMatch) => match.rematch(completedMatch, savedPlayers)}
+        persistentPlayerIds={savedPlayers.map((player) => player.id)}
+        hapticsEnabled={preferences.hapticsEnabled}
       />
     );
   }
   if (screen === "history") {
-    return <HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} onBack={showHome} />;
+    return <HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} persistentPlayerIds={savedPlayers.map((player) => player.id)} onBack={showHome} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, savedPlayers); } catch (cause) { match.setError(cause instanceof Error ? cause.message : "Не удалось начать новый матч"); showHome(); } }} />;
   }
   if (screen === "statistics") {
     return <StatisticsPage matches={visibleHistory} players={persistentStatisticsPlayers(savedPlayers, visibleHistory)} initialPlayerIds={statisticsContext} onBack={showHome} />;
   }
   if (screen === "settings") {
-    return <SettingsPage onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} />;
+    return <SettingsPage onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} hapticsSupported={typeof navigator.vibrate === "function"} hapticsEnabled={preferences.hapticsEnabled} onHaptics={preferences.setHapticsEnabled} />;
   }
 
   const resumeView = match.resume ? toGameViewModel(match.resume.snapshot, playersForMatches(savedPlayers, [match.resume.snapshot.match])) : undefined;

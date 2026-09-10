@@ -1,11 +1,12 @@
 import type { ScoreboardRowViewModel } from "../game/gameViewModel";
 import { useEffect, useRef } from "react";
+import { PlayerIdentity } from "./PlayerIdentity";
 type Props = { rows: readonly ScoreboardRowViewModel[] };
 export function Scoreboard({ rows }: Props) {
   const active = useRef<HTMLElement>(null);
   const activeId = rows.find((row) => row.active)?.playerId;
   useEffect(() => {
-    if (rows.length > 2) active.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (rows.length > 2) active.current?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest", inline: "center" });
   }, [activeId, rows.length]);
   return (
     <section
@@ -26,9 +27,9 @@ export function Scoreboard({ rows }: Props) {
               <span className="turn-spacer" />
             )}
             <div className="player-head">
-              <h2>{row.name}</h2>
+              <h2><PlayerIdentity playerId={row.playerId} name={row.name} temporary={row.temporary} position={row.position} compact /></h2>
             </div>
-            <div className="main-score">{row.score}</div>
+            <div key={`${row.playerId}-${row.scoreRevision}-${row.score}`} className="main-score score-value">{row.score}</div>
             <div className="mini-stats">
               <span>
                 Среднее <b>{row.average}</b>
