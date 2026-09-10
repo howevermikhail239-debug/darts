@@ -55,9 +55,10 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, company, on
 
   return (
     <main className="setup-page">
-      <header className="brand"><div className="brand-mark">◎</div><div><h1>{t.newGame}</h1><p>От двух до восьми игроков. Каждый дротик учтён.</p></div></header>
+      <header className="brand"><div className="brand-mark" aria-hidden="true">◎</div><div><h1>{t.newGame}</h1><p>Настройте матч — и к мишени.</p></div></header>
       <CompanyContextPanel company={company} syncNote={syncNote} onCreateCompany={onCreateCompany} onAddSharedPlayer={onAddSharedPlayer} onLeaveCompany={onLeaveCompany} onRetry={onRetry} />
-      <section className="setup-form">
+      <section className="setup-form" aria-label="Настройка матча">
+        <div className="setup-section-title"><span>1</span><div><h2>Участники</h2><p>От 2 до 8 игроков</p></div></div>
         <ParticipantList
           participants={participants}
           saved={saved}
@@ -67,11 +68,13 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, company, on
         />
         {!participantsValid ? <p className="reason">Имена должны быть заполнены, а сохранённый профиль нельзя выбрать дважды.</p> : null}
         {visitsRequired && !visitsValid ? <p className="reason">Количество подходов должно быть от 1 до 999.</p> : null}
+        <div className="setup-section-title"><span>2</span><div><h2>Правила матча</h2><p>Главные параметры — без лишних шагов</p></div></div>
         <GameModeSelector
           mode={mode} onMode={setMode} startingScore={startingScore} onStartingScore={setStartingScore}
           outRule={outRule} onOutRule={setOutRule} x01Format={x01Format} onX01Format={setX01Format}
           visits={visits} custom={custom} onVisits={setVisits} onCustom={setCustom}
         />
+        <div className="setup-section-title compact"><span>3</span><div><h2>Кто начинает</h2></div></div>
         <StarterSelector participants={participants} starter={starter} onStarter={setStarter} />
         <button className="primary start" onClick={() => void start()} disabled={busy || !valid}>{busy ? "Создаём…" : t.start}</button>
       </section>
@@ -86,8 +89,8 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
   const [creatingCompany, setCreatingCompany] = useState(false);
   if (company) return (
     <section className="company-context" aria-label="Компания">
-      <b>Компания{company.name ? ` · ${company.name}` : ""}</b>
-      <span role="status">{syncNote ?? "Все матчи синхронизированы"}</span>
+      <div className="context-heading"><span className="context-icon" aria-hidden="true">◆</span><div><b>Компания{company.name ? ` · ${company.name}` : ""}</b><small>Общие профили, история и статистика</small></div></div>
+      <span className={syncNote ? "sync-state pending" : "sync-state saved"} role="status">{syncNote ?? "Все матчи синхронизированы"}</span>
       <button className="link-button" onClick={() => void navigator.clipboard?.writeText(location.href)}>Пригласить: скопировать ссылку</button>
       {syncNote ? <button className="link-button" onClick={() => void onRetry?.()}>Повторить</button> : null}
       <button className="link-button" onClick={onLeaveCompany}>Это устройство</button>
@@ -97,7 +100,7 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
   );
   return (
     <section className="company-context">
-      <b>Играете локально на этом устройстве</b>
+      <div className="context-heading"><span className="context-icon" aria-hidden="true">●</span><div><b>Локальная игра</b><small>Матчи хранятся только на этом устройстве</small></div></div>
       {creatingCompany ? <><label>Название компании (необязательно)<input value={companyName} maxLength={80} onChange={(event) => setCompanyName(event.target.value)} /></label><button className="secondary" onClick={() => void onCreateCompany?.(companyName)}>Создать</button></> : <button className="secondary" onClick={() => setCreatingCompany(true)}>Создать компанию</button>}
     </section>
   );
@@ -111,7 +114,7 @@ function ParticipantList({ participants, saved, onChange, onRemove, onAdd }: { p
 
 function ParticipantRow({ participant, index, saved, removable, onChange, onRemove }: { participant: ParticipantDraft; index: number; saved: readonly Player[]; removable: boolean; onChange: (participant: ParticipantDraft) => void; onRemove: () => void }) {
   return (
-    <label>Игрок {index + 1}<span className="input-row">
+    <label><span className="participant-label">Игрок {index + 1}{participant.playerId ? <em>Профиль компании</em> : <em>Временный</em>}</span><span className="input-row">
       <input aria-label={`Имя игрока ${index + 1}`} value={participant.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={28} />
       {removable ? <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>×</button> : null}
     </span>{saved.length ? <select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); if (player) onChange({ name: player.name, playerId: player.id }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select> : null}</label>

@@ -9,11 +9,13 @@ import { SettingsPage } from "./presentation/pages/SettingsPage";
 import { useCompanySync } from "./presentation/hooks/useCompanySync";
 import { useMatchSession } from "./presentation/hooks/useMatchSession";
 import { toGameViewModel } from "./presentation/game/gameViewModel";
+import { Dialog } from "./presentation/components/Dialog";
 import "./presentation/styles.css";
 import "./presentation/concept-overrides.css";
 import "./presentation/active-game.css";
 import "./presentation/statistics.css";
 import "./presentation/stage3.css";
+import "./presentation/stage4.css";
 
 type Screen = "home" | "game" | "history" | "statistics" | "settings";
 
@@ -35,6 +37,7 @@ function playersForMatches(saved: readonly Player[], matches: readonly Match[]):
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
+  const [confirmResumeAbandon, setConfirmResumeAbandon] = useState(false);
   const showGame = useCallback(() => setScreen("game"), []);
   const showHome = useCallback(() => setScreen("home"), []);
   const company = useCompanySync({ sync: companySync, cache: services.shared });
@@ -95,10 +98,7 @@ export default function App() {
             {resumeView.draftDescription ? <span>{resumeView.draftDescription}</span> : null}
           </div>
           <button className="primary" onClick={match.continueResume}>Продолжить</button>
-          <button className="secondary" onClick={() => {
-            if (!window.confirm("Прервать текущий матч? Незавершённый подход не попадёт в историю.")) return;
-            void match.abandonResume().catch((cause: unknown) => match.setError(cause instanceof Error ? cause.message : "Ошибка сохранения"));
-          }}>Прервать матч</button>
+          <button className="danger-quiet" onClick={() => setConfirmResumeAbandon(true)}>Прервать матч</button>
         </aside>
       ) : null}
       <SetupPage
@@ -125,6 +125,10 @@ export default function App() {
           </section>
         </div>
       ) : null}
+      <Dialog open={confirmResumeAbandon} title="Прервать текущий матч?" description="Незавершённый подход не попадёт в историю. Подтверждённые подходы сохранятся как прерванный матч." confirmLabel="Прервать матч" destructive onCancel={() => setConfirmResumeAbandon(false)} onConfirm={() => {
+        setConfirmResumeAbandon(false);
+        void match.abandonResume().catch((cause: unknown) => match.setError(cause instanceof Error ? cause.message : "Ошибка сохранения"));
+      }} />
     </>
   );
 }

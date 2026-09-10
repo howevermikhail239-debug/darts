@@ -27,6 +27,7 @@ export type GameViewModel = Readonly<{
   abandoned: boolean;
   canConfirm: boolean;
   canAddNextDart: boolean;
+  confirmLabel: string;
   draftHint: string;
   summaryEyeline: string;
   summaryTitle: string;
@@ -109,6 +110,11 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
     abandoned: match.status === "abandoned",
     canConfirm: !awaitingTieDecision && !snapshot.isConfirming && snapshot.evaluation.status !== "in_progress" && snapshot.evaluation.status !== "invalid",
     canAddNextDart: !awaitingTieDecision && !snapshot.isConfirming && snapshot.evaluation.canAddNextDart,
+    confirmLabel: snapshot.isConfirming
+      ? "Сохраняем…"
+      : snapshot.evaluation.status === "bust"
+        ? "Подтвердить перебор"
+        : `Подтвердить ${snapshot.evaluation.awardedScore}`,
     draftHint: match.state.kind === "fixed_visits"
       ? "Введите все три физических дротика"
       : "Можно подтвердить после трёх дротиков или досрочного завершения",

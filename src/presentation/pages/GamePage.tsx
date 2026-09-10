@@ -19,6 +19,8 @@ import { DartPad } from "../components/DartPad";
 import { t } from "../strings";
 import { draftIsEmpty, isDetailedDraft } from '../../domain/match/VisitDraft';
 import { toGameViewModel } from "../game/gameViewModel";
+import { Dialog } from "../components/Dialog";
+type PendingDialog = { title: string; description: string; confirmLabel: string; destructive?: boolean; action: () => void };
 type Props = {
   session: GameSession;
   initial: SessionSnapshot;
@@ -41,6 +43,7 @@ export function GamePage({
   const [multiplier, setMultiplier] = useState<Multiplier>(1);
   const [selected, setSelected] = useState<number>();
   const [error, setError] = useState<string>();
+  const [dialog, setDialog] = useState<PendingDialog>();
   useWakeLock(snapshot.match.status === "in_progress");
   const update = (s: SessionSnapshot) => {
     setSnapshot(s);
@@ -62,17 +65,28 @@ export function GamePage({
   const undo = async () => {
     try {
       const hasDraft = !draftIsEmpty(snapshot.draft);
-      if (
-        hasDraft &&
-        !window.confirm("Текущий незавершённый подход будет сброшен. Отменить предыдущий подход?")
-      )
+      if (hasDraft) {
+        setDialog({ title: "Отменить предыдущий подход?", description: "Текущий незавершённый подход будет сброшен. Это действие нельзя отменить.", confirmLabel: "Сбросить и отменить", destructive: true, action: () => { setDialog(undefined); void undoConfirmed(true); } });
         return;
-      update(await session.undo(hasDraft));
+      }
+      await undoConfirmed(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка");
+    }
+  };
+  const undoConfirmed = async (discardDraft: boolean) => {
+    try {
+      update(await session.undo(discardDraft));
       setSelected(undefined);
       setMultiplier(1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка");
     }
+  };
+  const changeInputMode = (mode: "detailed" | "aggregate") => {
+    const apply = (discard: boolean) => void session.setInputMode(mode, discard).then(update).catch(e => setError(e instanceof Error ? e.message : "Ошибка сохранения"));
+    if (draftIsEmpty(snapshot.draft)) { apply(false); return; }
+    setDialog({ title: "Переключить способ ввода?", description: "Текущий незавершённый подход будет сброшен.", confirmLabel: "Сбросить и переключить", destructive: true, action: () => { setDialog(undefined); apply(true); } });
   };
   const confirm = async () => {
     try {
@@ -118,12 +132,7 @@ export function GamePage({
         </div>
         <button
           className="text-icon"
-          onClick={() => {
-            if (!window.confirm("Прервать текущий матч? Незавершённый подход не попадёт в историю.")) return;
-            void session.abandon().then(onClosed).catch((e) =>
-              setError(e instanceof Error ? e.message : "Ошибка сохранения"),
-            );
-          }}
+          onClick={() => setDialog({ title: "Прервать матч?", description: "Незавершённый подход не попадёт в историю. Подтверждённые результаты сохранятся как прерванный матч.", confirmLabel: "Прервать матч", destructive: true, action: () => { setDialog(undefined); void session.abandon().then(onClosed).catch((e) => setError(e instanceof Error ? e.message : "Ошибка сохранения")); } })}
           aria-label={t.abandon}
         >
           ×
@@ -134,14 +143,15 @@ export function GamePage({
         ● {t.currentVisit}: <strong>{view.currentPlayerName}</strong>
       </div>
       <div className="segments input-mode" aria-label="Способ ввода">
-        <button type="button" className={isDetailedDraft(snapshot.draft)?'selected':''} onClick={()=>{const discard=!draftIsEmpty(snapshot.draft)&&window.confirm('Текущий незавершённый подход будет сброшен. Переключить способ ввода?');if(!draftIsEmpty(snapshot.draft)&&!discard)return;void session.setInputMode('detailed',discard).then(update).catch(e=>setError(e instanceof Error?e.message:'Ошибка сохранения'));}}>По дротикам</button>
-        <button type="button" className={!isDetailedDraft(snapshot.draft)?'selected':''} onClick={()=>{const discard=!draftIsEmpty(snapshot.draft)&&window.confirm('Текущий незавершённый подход будет сброшен. Переключить способ ввода?');if(!draftIsEmpty(snapshot.draft)&&!discard)return;void session.setInputMode('aggregate',discard).then(update).catch(e=>setError(e instanceof Error?e.message:'Ошибка сохранения'));}}>Суммой за подход</button>
+        <button type="button" className={isDetailedDraft(snapshot.draft)?'selected':''} aria-pressed={isDetailedDraft(snapshot.draft)} onClick={()=>changeInputMode('detailed')}>По дротикам</button>
+        <button type="button" className={!isDetailedDraft(snapshot.draft)?'selected':''} aria-pressed={!isDetailedDraft(snapshot.draft)} onClick={()=>changeInputMode('aggregate')}>Суммой за подход</button>
       </div>
       {!isDetailedDraft(snapshot.draft)?<label className="aggregate-input">Сумма за подход<input type="number" min="0" max="180" step="1" value={snapshot.draft.score??''} onChange={event=>{const value=event.target.value===''?undefined:Number(event.target.value);void session.setAggregateScore(value).then(update).catch(e=>setError(e instanceof Error?e.message:'Ошибка сохранения'));}}/></label>:null}
       <DraftPanel
         snapshot={snapshot}
         hint={view.draftHint}
         canConfirm={view.canConfirm}
+        confirmLabel={view.confirmLabel}
         selected={selected}
         onSelect={(i) => setSelected(selected === i ? undefined : i)}
         onRemove={() => {
@@ -218,6 +228,7 @@ export function GamePage({
       >
         {t.undo}
       </button>
+      <Dialog open={Boolean(dialog)} title={dialog?.title ?? ""} description={dialog?.description ?? ""} confirmLabel={dialog?.confirmLabel ?? "Подтвердить"} destructive={Boolean(dialog?.destructive)} onCancel={() => setDialog(undefined)} onConfirm={() => { dialog?.action(); }} />
     </main>
   );
 }

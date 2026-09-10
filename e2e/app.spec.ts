@@ -332,8 +332,8 @@ test("fixed visits tie can start an extra round and safely tie again", async ({ 
 test("abandon archives confirmed play and does not offer resume after reload", async ({ page }) => {
   await startMatch(page);
   await missVisit(page);
-  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Прервать матч" }).click();
+  await page.getByRole("dialog", { name: "Прервать матч?" }).getByRole("button", { name: "Прервать матч" }).click();
   await page.getByRole("button", { name: "История" }).click();
   await expect(page.getByText("Матч прерван")).toBeVisible();
   await page.reload();
@@ -483,7 +483,7 @@ test("active draft survives navigation to home and history", async ({ page }) =>
   await page.getByRole("button", { name: "На главный экран" }).click();
   await expect(page.getByText("Незавершённый подход · 1/3")).toBeVisible();
   await page.getByRole("button", { name: "История" }).click();
-  await page.getByRole("button", { name: "‹" }).click();
+  await page.getByRole("button", { name: "Назад" }).click();
   await page.getByRole("button", { name: "Продолжить" }).click();
   await expect(page.getByRole("button", { name: "Дротик 1: S20, заменить" })).toBeVisible();
   await expect(page.locator(".main-score").first()).toHaveText("501");
@@ -517,8 +517,8 @@ test("starting another game requires an explicit choice and preserves the active
 test("abandon clears an unconfirmed draft without adding it to history", async ({ page }) => {
   await startMatch(page);
   await page.getByRole("button", { name: "Сектор 20, множитель 1" }).click();
-  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Прервать матч" }).click();
+  await page.getByRole("dialog", { name: "Прервать матч?" }).getByRole("button", { name: "Прервать матч" }).click();
   await page.getByRole("button", { name: "История" }).click();
   await expect(page.getByText("Матч прерван")).toBeVisible();
   await expect(page.getByRole("listitem")).toHaveCount(0);
@@ -599,8 +599,8 @@ test("player statistics mode filter switches between 501 and scoring series", as
   await page.getByLabel("Выбрать сохранённого игрока 2").selectOption({ label: "Игрок 2" });
   await page.getByRole("button", { name: "Начать" }).click();
   await scoringVisit(page, 20);
-  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Прервать матч" }).click();
+  await page.getByRole("dialog", { name: "Прервать матч?" }).getByRole("button", { name: "Прервать матч" }).click();
   await page.getByRole("button", { name: "Статистика" }).click();
   await page.getByRole("button", { name: /Игрок 1/ }).click();
   const mode = page.locator(".stats-filters").getByLabel("Режим");
@@ -668,7 +668,7 @@ test("company match is finalized on device A and contributes to device B history
     await a.getByRole('button', { name: 'Подтвердить 0' }).click(); await a.getByRole('button', { name: 'Завершить' }).click();
     const b = await deviceB.newPage(); await b.goto(a.url());
     await b.getByRole('button', { name: 'История' }).click(); await expect(b.getByText('Миша — Саша')).toBeVisible();
-    await b.getByRole('button', { name: '‹' }).click(); await b.getByRole('button', { name: 'Статистика' }).click();
+    await b.getByRole('button', { name: 'Назад' }).click(); await b.getByRole('button', { name: 'Статистика' }).click();
     await expect(b.getByRole('button', { name: /Миша.*20\.0/ })).toBeVisible();
     await expect(b.getByRole('button', { name: /Саша.*0\.0/ })).toBeVisible();
     await b.getByRole('button', { name: 'Назад' }).click();
@@ -682,7 +682,7 @@ test("company match is finalized on device A and contributes to device B history
     await b.getByRole('button', { name: 'Завершить' }).click();
     await a.reload(); await a.getByRole('button', { name: 'История' }).click();
     await expect(a.locator('.history-match')).toHaveCount(2);
-    await a.getByRole('button', { name: '‹' }).click(); await a.getByRole('button', { name: 'Статистика' }).click();
+    await a.getByRole('button', { name: 'Назад' }).click(); await a.getByRole('button', { name: 'Статистика' }).click();
     await expect(a.getByRole('button', { name: /Миша.*10\.0/ })).toBeVisible();
     await expect(a.getByRole('button', { name: /Саша.*10\.0/ })).toBeVisible();
   } finally { await deviceA.close(); await deviceB.close(); }
@@ -716,9 +716,9 @@ test('abandoned shared match is propagated without becoming a completed result',
   try {
     const a = await aContext.newPage(); await createCompanyWithPlayers(a, 'Прерванная лига', ['Миша', 'Саша']); const url = a.url();
     await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await a.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Саша' }); await a.getByRole('button', { name: 'Начать' }).click();
-    a.once('dialog', dialog => void dialog.accept()); await a.getByRole('button', { name: 'Прервать матч' }).click();
+    await a.getByRole('button', { name: 'Прервать матч' }).click(); await a.getByRole('dialog', { name: 'Прервать матч?' }).getByRole('button', { name: 'Прервать матч' }).click();
     const b = await bContext.newPage(); await b.goto(url); await b.getByRole('button', { name: 'История' }).click(); await expect(b.getByText('Матч прерван')).toBeVisible();
-    await b.getByRole('button', { name: '‹' }).click(); await b.getByRole('button', { name: 'Статистика' }).click(); await b.getByRole('button', { name: /Миша/ }).click(); await expect(b.getByText('Завершённые игры').locator('..').getByText('0', { exact: true })).toBeVisible();
+    await b.getByRole('button', { name: 'Назад' }).click(); await b.getByRole('button', { name: 'Статистика' }).click(); await b.getByRole('button', { name: /Миша/ }).click(); await expect(b.getByText('Завершённые игры').locator('..').getByText('0', { exact: true })).toBeVisible();
   } finally { await aContext.close(); await bContext.close(); }
 });
 
@@ -729,4 +729,53 @@ test('company match keeps temporary participant out of shared player catalog', a
     await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'Завершить' }).click();
     const b = await bContext.newPage(); await b.goto(url); await expect(b.getByLabel('Выбрать сохранённого игрока 1').locator('option')).toHaveCount(2); await b.getByRole('button', { name: 'История' }).click(); await expect(b.getByText('Миша — Игрок 2')).toBeVisible();
   } finally { await aContext.close(); await bContext.close(); }
+});
+
+test('stage 4 viewport matrix has no page overflow or clipped primary controls', async ({ page }) => {
+  for (const viewport of [
+    { width: 320, height: 568 }, { width: 360, height: 800 }, { width: 390, height: 844 },
+    { width: 412, height: 915 }, { width: 768, height: 1024 }, { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Начать' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    const startBox = await page.getByRole('button', { name: 'Начать' }).boundingBox();
+    expect(startBox?.width).toBeGreaterThanOrEqual(44);
+    expect(startBox?.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('stage 4 destructive dialog traps focus, closes on Escape and restores focus', async ({ page }) => {
+  await startMatch(page);
+  const abandon = page.getByRole('button', { name: 'Прервать матч' });
+  await abandon.focus();
+  await abandon.click();
+  const dialog = page.getByRole('dialog', { name: 'Прервать матч?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Отмена' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Прервать матч' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(abandon).toBeFocused();
+});
+
+test('stage 4 eight-player round keeps active player readable in an internal rail', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  for (let count = 2; count < 8; count += 1) await page.getByRole('button', { name: '+ Добавить игрока' }).click();
+  for (let index = 1; index <= 8; index += 1) await page.getByLabel(`Имя игрока ${index}`).fill(index % 2 ? `Игрок ${index}` : `Очень длинное имя игрока ${index}`);
+  await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByText('Текущий подход: Игрок 1')).toBeVisible();
+  for (let player = 2; player <= 8; player += 1) {
+    await missVisit(page);
+    await expect(page.getByText(`Текущий подход: ${player % 2 ? `Игрок ${player}` : `Очень длинное имя игрока ${player}`}`)).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
+  expect(await page.locator('.scoreboard').evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
+  for (const name of ['×1', '×2', '×3', 'Мимо']) {
+    const box = await page.getByRole('button', { name, exact: true }).boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
 });

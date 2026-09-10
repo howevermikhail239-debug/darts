@@ -19,7 +19,7 @@ const readJson = async req => { let size = 0, body = ''; for await (const c of r
 const group = token => data.groups[tokenHash(token)];
 const validName = x => typeof x === 'string' && x.trim().length > 0 && x.trim().length <= 80;
 const validMatch = x => x && typeof x === 'object' && typeof x.id === 'string' && x.id.length > 0 && x.id.length <= 160 && ['completed','abandoned'].includes(x.status) && Array.isArray(x.players) && x.players.length >= 2 && x.players.length <= 8 && Array.isArray(x.confirmedVisits) && x.state && typeof x.state === 'object';
-const mime = p => p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.json') ? 'application/json' : p.endsWith('.svg') ? 'image/svg+xml' : p.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
+const mime = p => p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.webmanifest') ? 'application/manifest+json' : p.endsWith('.json') ? 'application/json' : p.endsWith('.svg') ? 'image/svg+xml' : p.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
 createServer(async (req, res) => { try {
   const url = new URL(req.url, 'http://localhost'); const parts = url.pathname.split('/').filter(Boolean);
   if (storageError && url.pathname.startsWith('/api/')) return send(res, 503, { error: 'unavailable' });

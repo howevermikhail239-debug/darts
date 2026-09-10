@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSnapshot } from "../src/application/GameSession";
 import { emptyDraft } from "../src/domain/match/VisitDraft";
+import { numberThrow } from "../src/domain/darts/DartThrow";
 import type { Match, Player } from "../src/domain/match/models";
 import { rulesFor } from "../src/domain/rules/rulesFor";
 import { toGameViewModel } from "../src/presentation/game/gameViewModel";
@@ -57,6 +58,14 @@ describe("GameViewModel", () => {
       { name: "Анна", score: 401, active: true },
       { name: "Борис", score: 501, active: false },
     ]);
+  });
+
+  it("formats confirm labels from the authoritative draft evaluation", () => {
+    const match = x01();
+    const draft = { darts: [numberThrow(20, 3), numberThrow(20, 2), numberThrow(5, 1)] } as const;
+    const ready: SessionSnapshot = { match, draft, evaluation: rulesFor(match).evaluateDraft(draft, match), isConfirming: false };
+    expect(toGameViewModel(ready, players).confirmLabel).toBe("Подтвердить 105");
+    expect(toGameViewModel({ ...ready, isConfirming: true }, players).confirmLabel).toBe("Сохраняем…");
   });
 
   it("maps fixed visits", () => {

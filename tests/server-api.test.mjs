@@ -20,6 +20,8 @@ test('companies isolate data, preserve stable players and idempotent immutable m
   const dir = await mkdtemp(join(tmpdir(), 'darts-server-')); const file = join(dir, 'store.json'); let server;
   try {
     server = await start(file);
+    const manifest = await fetch(`${server.url}/manifest.webmanifest`);
+    assert.equal(manifest.status, 200); assert.match(manifest.headers.get('content-type') ?? '', /^application\/manifest\+json/);
     const a = await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Дартс' }) });
     const b = await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Другая' }) });
     assert.equal(a.status, 201); assert.match(a.body.token, /^[A-Za-z0-9_-]{43}$/); assert.notEqual(a.body.token, b.body.token);

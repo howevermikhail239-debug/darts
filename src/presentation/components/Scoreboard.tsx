@@ -1,6 +1,12 @@
 import type { ScoreboardRowViewModel } from "../game/gameViewModel";
+import { useEffect, useRef } from "react";
 type Props = { rows: readonly ScoreboardRowViewModel[] };
 export function Scoreboard({ rows }: Props) {
+  const active = useRef<HTMLElement>(null);
+  const activeId = rows.find((row) => row.active)?.playerId;
+  useEffect(() => {
+    if (rows.length > 2) active.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeId, rows.length]);
   return (
     <section
       className={`scoreboard ${rows.length > 2 ? "multi" : ""}`}
@@ -10,11 +16,12 @@ export function Scoreboard({ rows }: Props) {
         return (
           <article
             key={row.playerId}
+            ref={row.active ? active : undefined}
             className={`player-score ${row.active ? "active" : ""}`}
             aria-current={row.active ? "true" : undefined}
           >
             {row.active ? (
-              <span className="turn-mark">● ХОД</span>
+              <span className="turn-mark"><span aria-hidden="true">●</span> ХОД</span>
             ) : (
               <span className="turn-spacer" />
             )}

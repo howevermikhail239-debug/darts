@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Dialog } from '../components/Dialog';
 
 export function SettingsPage({ onBack, onExport, onRestore }: {
   onBack: () => void;
@@ -8,6 +9,7 @@ export function SettingsPage({ onBack, onExport, onRestore }: {
   const file = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File>();
   const download = async () => {
     setBusy(true);
     try {
@@ -22,11 +24,10 @@ export function SettingsPage({ onBack, onExport, onRestore }: {
     finally { setBusy(false); }
   };
   const restore = async (selected: File) => {
-    if (!window.confirm('Текущие локальные данные будут заменены данными из резервной копии. Продолжить?')) return;
     setBusy(true);
     try { await onRestore(await selected.text()); setMessage('Данные восстановлены. Приложение будет перезагружено.'); location.reload(); }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Не удалось восстановить данные.'); }
     finally { setBusy(false); if (file.current) file.current.value = ''; }
   };
-  return <main className="settings-page"><header><button className="text-icon" onClick={onBack}>‹</button><h1>Настройки</h1></header><section className="setup-form"><h2>Данные</h2><p>Сохраните игроков, историю и незавершённую игру в один JSON-файл.</p><button className="primary" disabled={busy} onClick={()=>void download()}>Экспортировать данные</button><button className="secondary" disabled={busy} onClick={()=>file.current?.click()}>Восстановить из копии</button><input ref={file} hidden type="file" accept="application/json,.json" aria-label="Файл резервной копии" onChange={event=>{const selected=event.target.files?.[0];if(selected)void restore(selected);}}/>{message?<div role="status" className="notice">{message}</div>:null}</section></main>;
+  return <main className="settings-page"><header><button className="text-icon" onClick={onBack} aria-label="Назад">‹</button><h1>Настройки</h1></header><section className="setup-form"><h2>Данные</h2><p>Сохраните игроков, историю и незавершённую игру в один файл.</p><button className="primary" disabled={busy} onClick={()=>void download()}>Экспортировать данные</button><button className="secondary" disabled={busy} onClick={()=>file.current?.click()}>Восстановить из копии</button><input ref={file} hidden type="file" accept="application/json,.json" aria-label="Файл резервной копии" onChange={event=>{const selected=event.target.files?.[0];if(selected)setRestoreFile(selected);}}/>{message?<div role="status" className="notice">{message}</div>:null}</section><Dialog open={Boolean(restoreFile)} title="Восстановить данные?" description="Текущие локальные игроки, история и незавершённый матч будут заменены данными из выбранной копии." confirmLabel="Восстановить" destructive onCancel={() => { setRestoreFile(undefined); if (file.current) file.current.value = ''; }} onConfirm={() => { const selected = restoreFile; setRestoreFile(undefined); if (selected) void restore(selected); }} /></main>;
 }
