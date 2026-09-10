@@ -1,0 +1,28 @@
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #000b;
+}
+
+.active-dialog {
+  width: min(480px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.active-dialog h2,
+.active-dialog p {
+  margin: 0;
+}
+
+.active-dialog p {
+  color: var(--muted);
+}

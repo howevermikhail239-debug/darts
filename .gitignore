@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.playwright-cli/
+test-results/
+playwright-report/
+data/
+coverage/
+*.log
+*.env
+.env.*
+!.env.example
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+qa-*.png
+qa-mobile.png
