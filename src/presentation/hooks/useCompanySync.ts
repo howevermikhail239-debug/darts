@@ -65,11 +65,18 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     currentToken.current = token;
     let active = true;
     void (async () => {
-      const known = (await cache.companies()).find((item) => item.token === token);
+      const [knownCompanies, cachedPlayers, cachedMatches] = await Promise.all([
+        cache.companies(),
+        cache.players(token),
+        cache.matches(token),
+      ]);
+      const known = knownCompanies.find((item) => item.token === token);
       if (!active || generation.current !== expectedGeneration) return;
       if (known) {
         setCompany(known);
-        await applyCache(token, expectedGeneration);
+        setPlayers(cachedPlayers);
+        setHistory(cachedMatches.map((item) => item.match));
+        setNote(cachedMatches.some((item) => item.state !== "synced") ? "Матч ожидает отправки." : "Все матчи синхронизированы");
       }
       try {
         const opened = await sync.open(token);

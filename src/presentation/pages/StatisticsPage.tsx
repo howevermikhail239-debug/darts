@@ -14,6 +14,7 @@ import {
   type TrendMetric,
 } from "../../domain/statistics/StatisticsCalculator";
 import { PlayerIdentity } from "../components/PlayerIdentity";
+import { recentForm } from "../../domain/statistics/todaySummary";
 
 type Section = "overview" | "hits" | "distribution" | "trends" | "records";
 const modeLabels: Record<StatisticsMode, string> = { all: "Все", x01: "X01", fixed_visits: "Набор очков" };
@@ -25,23 +26,40 @@ const number = (value: number) => value.toFixed(1);
 type Props = { matches: readonly Match[]; players: readonly Player[]; initialPlayerIds?: readonly PlayerId[]; onBack: () => void };
 export function StatisticsPage({ matches, players, initialPlayerIds = [], onBack }: Props) {
   const available = players;
-  const relevant = initialPlayerIds.filter((id) => available.some((player) => player.id === id));
+  const availableById = useMemo(() => new Map(available.map((player) => [player.id, player])), [available]);
+  const relevant = useMemo(() => initialPlayerIds.filter((id) => availableById.has(id)), [availableById, initialPlayerIds]);
+  const matchesByPlayer = useMemo(() => {
+    const index = new Map<PlayerId, Match[]>();
+    const chronological = [...matches].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const match of chronological) for (const playerId of match.players) {
+      const own = index.get(playerId);
+      if (own) own.push(match); else index.set(playerId, [match]);
+    }
+    return index;
+  }, [matches]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<PlayerId | undefined>(() => relevant.length === 1 ? relevant[0] : undefined);
   const [compare, setCompare] = useState(() => relevant.length >= 2);
   const [mode, setMode] = useState<StatisticsMode>("all");
   const [period, setPeriod] = useState<StatisticsPeriod>("all");
-  const selected = available.find((player) => player.id === selectedPlayerId);
+  const selected = selectedPlayerId ? availableById.get(selectedPlayerId) : undefined;
+  const contextualPlayers = relevant.map((id) => availableById.get(id)).filter((player): player is Player => Boolean(player));
+  const showContextSwitcher = contextualPlayers.length >= 2 && (compare || selected);
   return <main className="statistics-page">
     <header className="stats-header"><button className="text-icon" onClick={onBack} aria-label="Назад">‹</button><div><h1>Статистика</h1><p>Только подтверждённые броски</p></div></header>
+    {showContextSwitcher ? <ContextSwitcher players={contextualPlayers} selectedPlayerId={compare ? undefined : selectedPlayerId} onCompare={() => { setSelectedPlayerId(undefined); setCompare(true); }} onPlayer={(id) => { setCompare(false); setSelectedPlayerId(id); }} /> : null}
     {available.length === 0 ? <p className="empty">Здесь появится накопительная статистика профилей. Временные участники остаются доступны в истории матчей.</p>
-      : compare ? <Comparison matches={matches} players={available} initialPlayerIds={relevant} mode={mode} onMode={setMode} onClose={() => setCompare(false)} />
-      : selected ? <PlayerDetails matches={matches} player={selected} mode={mode} period={period} onMode={setMode} onPeriod={setPeriod} onClose={() => setSelectedPlayerId(undefined)} />
-      : <Overview matches={matches} players={available} onSelect={setSelectedPlayerId} onCompare={() => setCompare(true)} />}
+      : compare ? <Comparison matches={matches} matchesByPlayer={matchesByPlayer} players={available} initialPlayerIds={relevant} mode={mode} onMode={setMode} onClose={() => setCompare(false)} onPlayer={(id) => { setCompare(false); setSelectedPlayerId(id); }} />
+      : selected ? <PlayerDetails matches={matchesByPlayer.get(selected.id) ?? []} player={selected} mode={mode} period={period} onMode={setMode} onPeriod={setPeriod} onClose={() => setSelectedPlayerId(undefined)} />
+      : <Overview matchesByPlayer={matchesByPlayer} players={available} onSelect={setSelectedPlayerId} onCompare={() => setCompare(true)} />}
   </main>;
 }
 
-function Overview({ matches, players, onSelect, onCompare }: { matches: readonly Match[]; players: readonly Player[]; onSelect: (id: PlayerId) => void; onCompare: () => void }) {
-  return <><section className="stats-player-grid" aria-label="Игроки">{players.map((player) => { const stats = statisticsForPlayerHistory(matches, player.id); return <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}><PlayerIdentity playerId={player.id} name={player.name} /><Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} /><Metric label="Лучший подход" value={stats.bestVisit} /><Metric label="Победы" value={pct(stats.winRate)} /><Metric label="180" value={stats.thresholds["180"]} /></button>; })}</section>
+function ContextSwitcher({ players, selectedPlayerId, onCompare, onPlayer }: { players: readonly Player[]; selectedPlayerId: PlayerId | undefined; onCompare: () => void; onPlayer: (id: PlayerId) => void }) {
+  return <nav className="stats-context-switcher" aria-label="Статистика участников матча"><button className={!selectedPlayerId ? "selected" : ""} aria-pressed={!selectedPlayerId} onClick={onCompare}>Сравнение</button>{players.map((player) => <button key={player.id} className={selectedPlayerId === player.id ? "selected" : ""} aria-pressed={selectedPlayerId === player.id} onClick={() => onPlayer(player.id)}><PlayerIdentity playerId={player.id} name={player.name} compact /></button>)}</nav>;
+}
+
+function Overview({ matchesByPlayer, players, onSelect, onCompare }: { matchesByPlayer: ReadonlyMap<PlayerId, readonly Match[]>; players: readonly Player[]; onSelect: (id: PlayerId) => void; onCompare: () => void }) {
+  return <><section className="stats-player-grid" aria-label="Игроки">{players.map((player) => { const stats = statisticsForPlayerHistory(matchesByPlayer.get(player.id) ?? [], player.id); return <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}><PlayerIdentity playerId={player.id} name={player.name} /><Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} /><Metric label="Лучший подход" value={stats.bestVisit} /><Metric label="Победы" value={pct(stats.winRate)} /><Metric label="180" value={stats.thresholds["180"]} /></button>; })}</section>
     {players.length >= 2 ? <button className="primary stats-compare-action" onClick={onCompare}>Сравнить игроков</button> : null}</>;
 }
 
@@ -52,10 +70,22 @@ function Filters({ mode, period, onMode, onPeriod }: { mode: StatisticsMode; per
 function PlayerDetails({ matches, player, mode, period, onMode, onPeriod, onClose }: { matches: readonly Match[]; player: Player; mode: StatisticsMode; period: StatisticsPeriod; onMode: (value: StatisticsMode) => void; onPeriod: (value: StatisticsPeriod) => void; onClose: () => void }) {
   const [section, setSection] = useState<Section>("overview");
   const stats = useMemo(() => statisticsForPlayerHistory(matches, player.id, mode, period), [matches, player.id, mode, period]);
-  return <><button className="stats-back" onClick={onClose}>← Все игроки</button><h2 className="stats-player-title"><PlayerIdentity playerId={player.id} name={player.name} /></h2><Filters mode={mode} period={period} onMode={onMode} onPeriod={onPeriod} />
+  const form = useMemo(() => recentForm(matches, player.id), [matches, player.id]);
+  const sparkline = useMemo(() => trendForPlayer(matches, player.id, "threeDartAverage").slice(-8), [matches, player.id]);
+  return <><button className="stats-back" onClick={onClose}>← Все игроки</button><PlayerHeader player={player} stats={stats} form={form} sparkline={sparkline} /><Filters mode={mode} period={period} onMode={onMode} onPeriod={onPeriod} />
     <nav className="stats-tabs" aria-label="Раздел статистики">{(["overview", "hits", "distribution", "trends", "records"] as const).map((key) => <button key={key} className={section === key ? "selected" : ""} onClick={() => setSection(key)}>{({ overview: "Обзор", hits: "Попадания", distribution: "Распределение", trends: "Динамика", records: "Рекорды" } as const)[key]}</button>)}</nav>
     {section === "overview" ? <PlayerOverview stats={stats} /> : section === "hits" ? <Hits stats={stats} /> : section === "distribution" ? <Distribution stats={stats} /> : section === "trends" ? <Trends matches={matches} playerId={player.id} mode={mode} period={period} /> : <Records matches={matches} playerId={player.id} mode={mode} />}
   </>;
+}
+
+function PlayerHeader({ player, stats, form, sparkline }: { player: Player; stats: PlayerHistoryStatistics; form: readonly ("win" | "loss" | "draw")[]; sparkline: readonly Readonly<{ value: number }>[] }) {
+  const labels = { win: "В", loss: "П", draw: "Н" } as const;
+  const formText = form.length ? form.map((result) => labels[result]).join(" · ") : "Недостаточно завершённых матчей";
+  const values = sparkline.map((point) => point.value);
+  const min = Math.min(...values), max = Math.max(...values), span = Math.max(1, max - min);
+  const points = values.map((value, index) => `${values.length === 1 ? 50 : index / (values.length - 1) * 100},${34 - (value - min) / span * 28}`).join(" ");
+  const trendText = values.length < 2 ? "Недостаточно данных для тренда" : `Среднее за 3 дротика в последних матчах: ${values.map(number).join(", ")}`;
+  return <section className="player-stat-header" aria-labelledby="player-stat-name"><div className="player-stat-identity"><PlayerIdentity playerId={player.id} name={player.name} /><h2 id="player-stat-name" className="visually-hidden">{player.name}</h2></div><div className="player-stat-average"><span>Среднее за 3 дротика</span><strong>{number(stats.threeDartAverage)}</strong></div><div className="recent-form"><span>Последние матчи</span><div aria-label={`Форма: ${formText}`}>{form.length ? form.map((result, index) => <i key={index} className={result}>{labels[result]}</i>) : <small>Пока мало данных</small>}</div></div>{values.length >= 2 ? <div className="player-sparkline"><svg viewBox="0 0 100 40" role="img" aria-label={trendText} preserveAspectRatio="none"><polyline points={points} /></svg><span>Тренд среднего</span></div> : null}</section>;
 }
 
 function PlayerOverview({ stats }: { stats: PlayerHistoryStatistics }) {
@@ -83,11 +113,11 @@ function Records({ matches, playerId, mode }: { matches: readonly Match[]; playe
   return <section className="stat-section"><div className="record-list"><MetricCard label="Лучший подход" value={records.bestVisit} /><MetricCard label="Лучшее среднее за 3 дротика" value={number(records.bestThreeDartAverage)} /><MetricCard label="100+ / 140+ / 180 за матч" value={`${records.most100Plus} / ${records.most140Plus} / ${records.most180s}`} /><MetricCard label="Утроения / Bull за матч" value={`${records.mostTriples} / ${records.mostBulls}`} /><MetricCard label="Минимальная доля промахов" value={records.lowestMissPercent === undefined ? "—" : pct(records.lowestMissPercent)} /></div><p className="stats-note">Процентный рекорд учитывается минимум после {MIN_PERCENT_RECORD_DARTS} физических дротиков в матче.</p></section>;
 }
 
-function Comparison({ matches, players, initialPlayerIds, mode, onMode, onClose }: { matches: readonly Match[]; players: readonly Player[]; initialPlayerIds: readonly PlayerId[]; mode: StatisticsMode; onMode: (value: StatisticsMode) => void; onClose: () => void }) {
+function Comparison({ matches, matchesByPlayer, players, initialPlayerIds, mode, onMode, onClose, onPlayer }: { matches: readonly Match[]; matchesByPlayer: ReadonlyMap<PlayerId, readonly Match[]>; players: readonly Player[]; initialPlayerIds: readonly PlayerId[]; mode: StatisticsMode; onMode: (value: StatisticsMode) => void; onClose: () => void; onPlayer: (id: PlayerId) => void }) {
   const [a, setA] = useState(initialPlayerIds[0] ?? players[0]?.id ?? ""), [b, setB] = useState(initialPlayerIds[1] ?? players[1]?.id ?? players[0]?.id ?? "");
   const playerA = players.find((player) => player.id === a), playerB = players.find((player) => player.id === b);
-  const statsA = statisticsForPlayerHistory(matches, a, mode), statsB = statisticsForPlayerHistory(matches, b, mode), meetings = headToHead(matches, a, b, mode);
-  return <section className="comparison"><button className="stats-back" onClick={onClose}>← К игрокам</button><h2>Сравнение игроков</h2><div className="comparison-selects"><label>Игрок A<select value={a} onChange={(event) => setA(event.target.value)}>{players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label><label>Игрок B<select value={b} onChange={(event) => setB(event.target.value)}>{players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label><label>Режим<select value={mode} onChange={(event) => onMode(event.target.value as StatisticsMode)}>{(Object.keys(modeLabels) as StatisticsMode[]).map((key) => <option key={key} value={key}>{modeLabels[key]}</option>)}</select></label></div>{a === b ? <p className="stats-note">Выберите двух разных игроков.</p> : <><div className="comparison-list">{[["Завершённые игры", statsA.completedGames, statsB.completedGames], ["Победы", statsA.wins, statsB.wins], ["Процент побед", statsA.winRate, statsB.winRate, true], ["Среднее за 3 дротика", statsA.threeDartAverage, statsB.threeDartAverage], ["Среднее за дротик", statsA.averagePerDart, statsB.averagePerDart], ["Лучший подход", statsA.bestVisit, statsB.bestVisit], ["100+", statsA.thresholds["100+"], statsB.thresholds["100+"]], ["140+", statsA.thresholds["140+"], statsB.thresholds["140+"]], ["180", statsA.thresholds["180"], statsB.thresholds["180"]], ["Доля утроений", percentage(statsA.triples, statsA.knownHitDarts), percentage(statsB.triples, statsB.knownHitDarts), true], ["Доля удвоений", percentage(statsA.doubles, statsA.knownHitDarts), percentage(statsB.doubles, statsB.knownHitDarts), true], ["Промахи", percentage(statsA.misses, statsA.knownHitDarts), percentage(statsB.misses, statsB.knownHitDarts), true, true]].map(([label, valueA, valueB, percent, lowerIsBetter]) => <ComparisonRow key={String(label)} label={String(label)} nameA={playerA?.name ?? "A"} nameB={playerB?.name ?? "B"} valueA={Number(valueA)} valueB={Number(valueB)} percent={Boolean(percent)} lowerIsBetter={Boolean(lowerIsBetter)} />)}</div><article className="head-to-head"><h3>Личные встречи</h3><strong>{playerA?.name} {meetings.playerAWins} : {meetings.playerBWins} {playerB?.name}</strong><span>Совместных матчей: {meetings.sharedMatches}</span><span>Победы других игроков: {meetings.otherPlayerWins}</span></article></>}</section>;
+  const statsA = statisticsForPlayerHistory(matchesByPlayer.get(a) ?? [], a, mode), statsB = statisticsForPlayerHistory(matchesByPlayer.get(b) ?? [], b, mode), meetings = headToHead(matchesByPlayer.get(a) ?? matches, a, b, mode);
+  return <section className="comparison"><button className="stats-back" onClick={onClose}>← К игрокам</button><h2>Сравнение игроков</h2><div className="comparison-player-links" aria-label="Полная статистика игроков">{playerA ? <button onClick={() => onPlayer(playerA.id)}><PlayerIdentity playerId={playerA.id} name={playerA.name} compact /><span>Открыть профиль</span></button> : null}{playerB ? <button onClick={() => onPlayer(playerB.id)}><PlayerIdentity playerId={playerB.id} name={playerB.name} compact /><span>Открыть профиль</span></button> : null}</div><div className="comparison-selects"><label>Игрок A<select value={a} onChange={(event) => setA(event.target.value)}>{players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label><label>Игрок B<select value={b} onChange={(event) => setB(event.target.value)}>{players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label><label>Режим<select value={mode} onChange={(event) => onMode(event.target.value as StatisticsMode)}>{(Object.keys(modeLabels) as StatisticsMode[]).map((key) => <option key={key} value={key}>{modeLabels[key]}</option>)}</select></label></div>{a === b ? <p className="stats-note">Выберите двух разных игроков.</p> : <><div className="comparison-list">{[["Завершённые игры", statsA.completedGames, statsB.completedGames], ["Победы", statsA.wins, statsB.wins], ["Процент побед", statsA.winRate, statsB.winRate, true], ["Среднее за 3 дротика", statsA.threeDartAverage, statsB.threeDartAverage], ["Среднее за дротик", statsA.averagePerDart, statsB.averagePerDart], ["Лучший подход", statsA.bestVisit, statsB.bestVisit], ["100+", statsA.thresholds["100+"], statsB.thresholds["100+"]], ["140+", statsA.thresholds["140+"], statsB.thresholds["140+"]], ["180", statsA.thresholds["180"], statsB.thresholds["180"]], ["Доля утроений", percentage(statsA.triples, statsA.knownHitDarts), percentage(statsB.triples, statsB.knownHitDarts), true], ["Доля удвоений", percentage(statsA.doubles, statsA.knownHitDarts), percentage(statsB.doubles, statsB.knownHitDarts), true], ["Промахи", percentage(statsA.misses, statsA.knownHitDarts), percentage(statsB.misses, statsB.knownHitDarts), true, true]].map(([label, valueA, valueB, percent, lowerIsBetter]) => <ComparisonRow key={String(label)} label={String(label)} nameA={playerA?.name ?? "A"} nameB={playerB?.name ?? "B"} valueA={Number(valueA)} valueB={Number(valueB)} percent={Boolean(percent)} lowerIsBetter={Boolean(lowerIsBetter)} />)}</div><article className="head-to-head"><h3>Личные встречи</h3><strong>{playerA?.name} {meetings.playerAWins} : {meetings.playerBWins} {playerB?.name}</strong><span>Совместных матчей: {meetings.sharedMatches}</span><span>Победы других игроков: {meetings.otherPlayerWins}</span></article></>}</section>;
 }
 
 function ComparisonRow({ label, nameA, nameB, valueA, valueB, percent, lowerIsBetter }: { label: string; nameA: string; nameB: string; valueA: number; valueB: number; percent: boolean; lowerIsBetter: boolean }) { const format = (value: number) => percent ? pct(value) : Number.isInteger(value) ? String(value) : number(value); const aBetter = lowerIsBetter ? valueA < valueB : valueA > valueB, bBetter = lowerIsBetter ? valueB < valueA : valueB > valueA; return <article className="comparison-row"><h3>{label}</h3><div><span><small>{nameA}</small><b>{format(valueA)}</b>{aBetter ? <em>Лучше</em> : null}</span><span><small>{nameB}</small><b>{format(valueB)}</b>{bBetter ? <em>Лучше</em> : null}</span></div></article>; }

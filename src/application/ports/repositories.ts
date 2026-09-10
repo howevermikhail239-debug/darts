@@ -1,5 +1,6 @@
 import type { VisitDraft } from '../../domain/match/VisitDraft';
 import type { Match, Player, PlayerId } from '../../domain/match/models';
+export type { LastSetupRepository } from '../LastSetup';
 
 export type ActiveVisitDraft = Readonly<{
   playerId: PlayerId;

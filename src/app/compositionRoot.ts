@@ -1,4 +1,4 @@
-import { IndexedDbMatchRepository, IndexedDbPlayerRepository, LocalSettingsRepository, IndexedDbBackupRepository, IndexedDbSharedRepository, clearLocalData } from '../infrastructure/persistence/IndexedDbRepositories';
+import { IndexedDbMatchRepository, IndexedDbPlayerRepository, LocalSettingsRepository, IndexedDbBackupRepository, IndexedDbSharedRepository, IndexedDbLastSetupRepository, clearLocalData } from '../infrastructure/persistence/IndexedDbRepositories';
 import { startMatch } from '../application/StartMatch';
 import { exportBackup, restoreBackup } from '../application/BackupService';
 import { CompanySync } from '../application/CompanySync';
@@ -15,6 +15,7 @@ export const services = {
   players,
   shared: new IndexedDbSharedRepository(),
   settings: new LocalSettingsRepository(),
+  lastSetups: new IndexedDbLastSetupRepository(),
   clearLocalData,
   id,
   now,

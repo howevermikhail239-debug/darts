@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   bull,
   miss,
@@ -23,6 +23,7 @@ import { Dialog } from "../components/Dialog";
 import { vibrateFor, type HapticEvent } from "../feedback/haptics";
 import { PlayerIdentity } from "../components/PlayerIdentity";
 import { toSummaryViewModel } from "../game/summaryViewModel";
+import { prepareResultShare } from "../../application/PrepareResultShare";
 type PendingDialog = { title: string; description: string; confirmLabel: string; destructive?: boolean; action: () => void };
 type Props = {
   session: GameSession;
@@ -286,14 +287,15 @@ function Summary({
   persistentPlayers: readonly Player[];
 }) {
   const [error, setError] = useState<string>();
+  const [shareNote, setShareNote] = useState<string>();
   const [busy, setBusy] = useState(false);
   const m = snapshot.match;
   const view = toGameViewModel(snapshot, players, persistentPlayers.map((player) => player.id));
-  const summary = toSummaryViewModel(m, persistentPlayers);
-  const records = m.players.filter((playerId) => persistentPlayers.some((player) => player.id === playerId)).flatMap((playerId) => {
+  const summary = useMemo(() => toSummaryViewModel(m, persistentPlayers), [m, persistentPlayers]);
+  const records = useMemo(() => m.players.filter((playerId) => persistentPlayers.some((player) => player.id === playerId)).flatMap((playerId) => {
     const player = persistentPlayers.find((item) => item.id === playerId);
     return newRecordsForMatch(m, previousMatches, playerId).map((record) => ({ ...record, playerName: player?.name ?? "Игрок" }));
-  });
+  }), [m, persistentPlayers, previousMatches]);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -305,6 +307,18 @@ function Summary({
     } finally {
       setBusy(false);
     }
+  };
+  const share = async () => {
+    if (busy) return;
+    setBusy(true); setError(undefined); setShareNote(undefined);
+    try {
+      const { shareResultCard } = await import("../../infrastructure/share/BrowserResultShare");
+      const outcome = await shareResultCard(prepareResultShare(m, players));
+      if (outcome === "downloaded") setShareNote("PNG-карточка сохранена на устройство.");
+      else if (outcome === "shared") setShareNote("Карточка передана в меню «Поделиться».");
+    } catch {
+      setError("Не удалось подготовить карточку. Попробуйте ещё раз.");
+    } finally { setBusy(false); }
   };
   return (
     <main className="summary-page">
@@ -323,13 +337,14 @@ function Summary({
         >
           Сыграть ещё раз
         </button>
-        <button
+        {persistentPlayers.length > 0 ? <button
           className="secondary"
           disabled={busy}
           onClick={() => void run(onStatistics)}
         >
           Статистика
-        </button>
+        </button> : null}
+        <button className="secondary share-result" disabled={busy} onClick={() => void share()}>Поделиться</button>
         <button className="secondary" disabled={busy} onClick={() => void run(onFinish)}>На главную</button>
         <button
           className="secondary"
@@ -339,6 +354,7 @@ function Summary({
           {t.undo}
         </button>
       </section>
+      {shareNote ? <p className="share-note" role="status">{shareNote}</p> : null}
       {error ? <div className="error" role="alert">{error}</div> : null}
     </main>
   );

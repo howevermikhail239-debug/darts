@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import type { MatchSetup } from "../../domain/match/createMatch";
 import type { MatchParticipantInput } from "../../application/StartMatch";
-import type { Player, PlayerId } from "../../domain/match/models";
+import { restoreLastSetupParticipants, type LastSetupTemplate, type RestoredSetupParticipant } from "../../application/LastSetup";
+import type { Player } from "../../domain/match/models";
+import type { TodaySummary } from "../../domain/statistics/todaySummary";
 import { PlayerIdentity } from "../components/PlayerIdentity";
 import { t } from "../strings";
 
 export type SetupParticipant = MatchParticipantInput;
-type ParticipantDraft = { name: string; playerId?: PlayerId };
+type ParticipantDraft = RestoredSetupParticipant;
 type Props = {
   saved: readonly Player[];
   onStart: (participants: readonly SetupParticipant[], setup: MatchSetup) => Promise<void>;
@@ -19,24 +21,29 @@ type Props = {
   onLeaveCompany?: (() => void) | undefined;
   onRetry?: (() => Promise<void>) | undefined;
   syncNote?: string | undefined;
+  initialSetup?: LastSetupTemplate | undefined;
+  today?: TodaySummary | undefined;
 };
 
 const defaultParticipant = (index: number): ParticipantDraft => ({ name: `Игрок ${index + 1}` });
 
-export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalPlayer, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry, syncNote }: Props) {
-  const [participants, setParticipants] = useState<ParticipantDraft[]>([defaultParticipant(0), defaultParticipant(1)]);
-  const [mode, setMode] = useState<"x01" | "fixed_visits">("x01");
-  const [x01Format, setX01Format] = useState<"unlimited" | "limited">("unlimited");
-  const [startingScore, setStartingScore] = useState<301 | 501 | 701>(501);
-  const [outRule, setOutRule] = useState<"straight" | "double">("straight");
-  const [visits, setVisits] = useState(20);
-  const [custom, setCustom] = useState(false);
-  const [starter, setStarter] = useState<number | "random">(0);
+export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalPlayer, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry, syncNote, initialSetup, today }: Props) {
+  const restoredParticipants = restoreLastSetupParticipants(initialSetup, saved);
+  const restored = initialSetup?.setup;
+  const restoredVisits = restored?.mode === "fixed_visits" ? restored.visitsPerPlayer : restored?.format.kind === "limited" ? restored.format.visitsPerPlayer : 20;
+  const [participants, setParticipants] = useState<ParticipantDraft[]>(() => [...(restoredParticipants ?? [defaultParticipant(0), defaultParticipant(1)])]);
+  const [mode, setMode] = useState<"x01" | "fixed_visits">(restored?.mode ?? "x01");
+  const [x01Format, setX01Format] = useState<"unlimited" | "limited">(restored?.mode === "x01" ? restored.format.kind : "unlimited");
+  const [startingScore, setStartingScore] = useState<301 | 501 | 701>(restored?.mode === "x01" ? restored.startingScore ?? 501 : 501);
+  const [outRule, setOutRule] = useState<"straight" | "double">(restored?.mode === "x01" ? restored.outRule ?? "straight" : "straight");
+  const [visits, setVisits] = useState(restoredVisits);
+  const [custom, setCustom] = useState(![5, 10, 20, 30].includes(restoredVisits));
+  const [starter, setStarter] = useState<number | "random">(restored?.startingPlayerIndex ?? 0);
   const [busy, setBusy] = useState(false);
   const createProfile = company ? onAddSharedPlayer : onAddLocalPlayer;
 
   const selectedIds = participants.flatMap((participant) => participant.playerId ? [participant.playerId] : []);
-  const participantsValid = participants.every((participant) => participant.name.trim()) && new Set(selectedIds).size === selectedIds.length;
+  const participantsValid = participants.every((participant) => participant.name.trim() && !participant.missingPlayerId) && new Set(selectedIds).size === selectedIds.length;
   const visitsValid = Number.isInteger(visits) && visits >= 1 && visits <= 999;
   const visitsRequired = mode === "fixed_visits" || x01Format === "limited";
   const valid = participantsValid && (!visitsRequired || visitsValid);
@@ -60,6 +67,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
     <main className="setup-page">
       <header className="brand"><div className="brand-mark" aria-hidden="true">◎</div><div><h1>{t.newGame}</h1><p>Настройте матч — и к мишени.</p></div></header>
       <CompanyContextPanel company={company} syncNote={syncNote} onCreateCompany={onCreateCompany} onAddSharedPlayer={onAddSharedPlayer} onLeaveCompany={onLeaveCompany} onRetry={onRetry} />
+      {today ? <TodayPanel summary={today} /> : null}
       <section className="setup-form" aria-label="Настройка матча">
         <div className="setup-section-title"><span>1</span><div><h2>Участники</h2><p>Профиль хранит статистику между матчами. Временный игрок — только для этой игры.</p></div></div>
         <ParticipantList
@@ -71,7 +79,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
           onRemove={(index) => { setParticipants((current) => current.filter((_, itemIndex) => itemIndex !== index)); setStarter(0); }}
           onAdd={() => setParticipants((current) => [...current, defaultParticipant(current.length)])}
         />
-        {!participantsValid ? <p className="reason">Имена должны быть заполнены, а сохранённый профиль нельзя выбрать дважды.</p> : null}
+        {!participantsValid ? <p className="reason">Заполните имена, замените недоступные профили и не выбирайте один профиль дважды.</p> : null}
         {visitsRequired && !visitsValid ? <p className="reason">Количество подходов должно быть от 1 до 999.</p> : null}
         <div className="setup-section-title"><span>2</span><div><h2>Правила матча</h2><p>Главные параметры — без лишних шагов</p></div></div>
         <GameModeSelector
@@ -86,6 +94,17 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
       <nav className="home-links"><button className="link-button" onClick={onHistory}>{t.history}</button><button className="link-button" onClick={onStatistics}>Статистика</button></nav>
     </main>
   );
+}
+
+function TodayPanel({ summary }: { summary: TodaySummary }) {
+  return <section className="today-panel" aria-labelledby="today-title">
+    <div className="today-heading"><div><span>Текущий день</span><h2 id="today-title">Сегодня</h2></div><strong>{summary.completedMatches}</strong><small>{summary.completedMatches === 1 ? "матч" : summary.completedMatches < 5 ? "матча" : "матчей"}</small></div>
+    <div className="today-facts">
+      {summary.leader ? <p><span>{summary.leader.tied ? "Лидеры по победам" : "Больше всего побед"}</span><b>{summary.leader.name} · {summary.leader.wins}</b></p> : null}
+      {summary.bestVisit ? <p><span>Лучший подход</span><b>{summary.bestVisit.score} · {summary.bestVisit.name}</b></p> : null}
+      {summary.maximums > 0 ? <p><span>Максимумы 180</span><b>{summary.maximums}</b></p> : null}
+    </div>
+  </section>;
 }
 
 function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry }: Pick<Props, "company" | "syncNote" | "onCreateCompany" | "onAddSharedPlayer" | "onLeaveCompany" | "onRetry">) {
@@ -173,13 +192,13 @@ function ParticipantRow({ participant, index, saved, profileLabel, onCreateProfi
     }
   };
   return (
-    <article className={`participant-card ${selected ? "profile" : "temporary"}`}>
+    <article className={`participant-card ${selected ? "profile" : participant.missingPlayerId ? "missing" : "temporary"}`}>
       <div className="participant-card-heading"><span>Игрок {index + 1}</span>{removable ? <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>×</button> : null}</div>
-      {selected ? <div className="selected-profile"><PlayerIdentity playerId={selected.id} name={selected.name} position={index} /><small>{profileLabel} · статистика сохраняется</small></div> : <>
+      {selected ? <div className="selected-profile"><PlayerIdentity playerId={selected.id} name={selected.name} position={index} /><small>{profileLabel} · статистика сохраняется</small></div> : participant.missingPlayerId ? <div className="missing-profile" role="status"><b>{participant.name}</b><span>Этот профиль больше недоступен. Выберите другого игрока или сделайте слот временным.</span><button type="button" className="quiet-button" onClick={() => onChange({ name: participant.name })}>Оставить временным</button></div> : <>
         <label className="temporary-name">Имя для этого матча<input aria-label={`Имя игрока ${index + 1}`} value={participant.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={28} /></label>
         <p className="participant-semantic">Временный игрок · статистика только этого матча</p>
       </>}
-      {saved.length ? <label className="profile-picker">{selected ? "Сменить игрока" : "Выбрать профиль"}<select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); onChange(player ? { name: player.name, playerId: player.id } : { name: `Игрок ${index + 1}` }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label> : null}
+      {saved.length || participant.missingPlayerId ? <label className="profile-picker">{selected || participant.missingPlayerId ? "Сменить игрока" : "Выбрать профиль"}<select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); onChange(player ? { name: player.name, playerId: player.id } : { name: participant.missingPlayerId ? participant.name : `Игрок ${index + 1}` }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label> : null}
       {onCreateProfile && !creating ? <button type="button" className="profile-slot-action" onClick={openCreator}>{selected ? "Создать другой профиль" : participant.name === `Игрок ${index + 1}` ? "Создать профиль" : "Сохранить как профиль"}</button> : null}
       {creating ? <form className="slot-profile-form" onSubmit={(event) => void createAndSelect(event)} aria-busy={busy}>
         <label>Имя профиля<input autoFocus value={profileName} maxLength={80} disabled={busy} onChange={(event) => setProfileName(event.target.value)} /></label>
@@ -203,7 +222,7 @@ function GameModeSelector({ mode, onMode, startingScore, onStartingScore, outRul
   return <>
     <fieldset><legend>{t.mode}</legend><div className="segments"><button type="button" className={mode === "x01" ? "selected" : ""} onClick={() => onMode("x01")}>X01</button><button type="button" className={mode === "fixed_visits" ? "selected" : ""} onClick={() => onMode("fixed_visits")}>{t.series}</button></div></fieldset>
     {mode === "x01" ? <>
-      <fieldset><legend>Игра</legend><div className="segments">{([301, 501, 701] as const).map((score) => <button type="button" key={score} className={startingScore === score ? "selected" : ""} onClick={() => onStartingScore(score)}>{score}</button>)}</div></fieldset>
+      <fieldset><legend>Стартовый счёт</legend><div className="x01-presets" role="radiogroup" aria-label="Стартовый счёт X01">{([301, 501, 701] as const).map((score) => <label key={score} className={startingScore === score ? "selected" : ""}><input type="radio" name="starting-score" value={score} checked={startingScore === score} onChange={() => onStartingScore(score)} /><strong>{score}</strong><span>{score === 301 ? "короткая" : score === 501 ? "классика" : "длинная"}</span><i aria-hidden="true">✓</i></label>)}</div></fieldset>
       <fieldset><legend>Завершение</legend><div className="segments"><button type="button" className={outRule === "straight" ? "selected" : ""} onClick={() => onOutRule("straight")}>Любым попаданием</button><button type="button" className={outRule === "double" ? "selected" : ""} onClick={() => onOutRule("double")}>Удвоением</button></div><p className="hint">{outRule === "straight" ? "Для победы достаточно получить ровно 0." : "Последний дротик должен попасть в удвоение или Bull."}</p></fieldset>
       <fieldset><legend>Формат X01</legend><div className="segments"><button type="button" className={x01Format === "unlimited" ? "selected" : ""} onClick={() => onX01Format("unlimited")}>До победы</button><button type="button" className={x01Format === "limited" ? "selected" : ""} onClick={() => onX01Format("limited")}>Ограничить количество подходов</button></div></fieldset>
       {x01Format === "limited" ? <VisitsField visits={visits} custom={custom} onVisits={onVisits} onCustom={onCustom} /> : null}

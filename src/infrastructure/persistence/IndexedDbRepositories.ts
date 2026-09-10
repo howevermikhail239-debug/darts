@@ -13,6 +13,7 @@ import { emptyDraft, type VisitDraft } from "../../domain/match/VisitDraft";
 import { scoreOf, type DartThrow } from "../../domain/darts/DartThrow";
 import { isReachableThreeDartScore } from '../../domain/match/aggregateScore';
 import type { SharedCompany } from '../../application/ports/companyGateway';
+import type { LastSetupRepository, LastSetupTemplate } from '../../application/LastSetup';
 
 interface DartsDb extends DBSchema {
   matches: { key: string; value: Match };
@@ -103,6 +104,15 @@ function isPlayer(value: unknown): value is Player {
 }
 function isSettings(value: unknown): value is Readonly<Record<string, string>> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
+}
+function isLastSetup(value: unknown): value is LastSetupTemplate {
+  if (!isRecord(value) || !Array.isArray(value.participants) || !isRecord(value.setup)) return false;
+  if (value.participants.length < 2 || value.participants.length > 8 || !value.participants.every((participant) =>
+    isRecord(participant) && isString(participant.name) && (participant.playerId === undefined || isString(participant.playerId)))) return false;
+  if (!isInteger(value.setup.startingPlayerIndex) || value.setup.startingPlayerIndex < 0 || value.setup.startingPlayerIndex >= value.participants.length) return false;
+  if (value.setup.mode === 'fixed_visits') return isInteger(value.setup.visitsPerPlayer) && value.setup.visitsPerPlayer >= 1 && value.setup.visitsPerPlayer <= 999;
+  if (value.setup.mode !== 'x01' || ![301, 501, 701].includes(Number(value.setup.startingScore)) || !['straight', 'double'].includes(String(value.setup.outRule)) || !isRecord(value.setup.format)) return false;
+  return value.setup.format.kind === 'unlimited' || (value.setup.format.kind === 'limited' && isInteger(value.setup.format.visitsPerPlayer) && value.setup.format.visitsPerPlayer >= 1 && value.setup.format.visitsPerPlayer <= 999);
 }
 function isDraft(value: unknown): value is VisitDraft {
   if (!isRecord(value)) return false;
@@ -240,6 +250,15 @@ export class LocalSettingsRepository implements SettingsRepository {
   }
   async save(values: Readonly<Record<string, string>>): Promise<void> {
     await (await db()).put('meta', structuredClone(values), 'settings');
+  }
+}
+export class IndexedDbLastSetupRepository implements LastSetupRepository {
+  async load(context: string): Promise<LastSetupTemplate | undefined> {
+    const value = await (await db()).get('meta', `lastSetup:${context}`);
+    return isLastSetup(value) ? structuredClone(value) : undefined;
+  }
+  async save(context: string, template: LastSetupTemplate): Promise<void> {
+    await (await db()).put('meta', structuredClone(template), `lastSetup:${context}`);
   }
 }
 export class IndexedDbBackupRepository implements BackupRepository {

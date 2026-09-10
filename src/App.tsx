@@ -1,10 +1,8 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import type { Match, Player, PlayerId } from "./domain/match/models";
 import { companySync, services } from "./app/compositionRoot";
 import { SetupPage } from "./presentation/pages/SetupPage";
 import { GamePage } from "./presentation/pages/GamePage";
-import { HistoryPage } from "./presentation/pages/HistoryPage";
-import { StatisticsPage } from "./presentation/pages/StatisticsPage";
 import { SettingsPage } from "./presentation/pages/SettingsPage";
 import { useCompanySync } from "./presentation/hooks/useCompanySync";
 import { useMatchSession } from "./presentation/hooks/useMatchSession";
@@ -12,14 +10,20 @@ import { toGameViewModel } from "./presentation/game/gameViewModel";
 import { Dialog } from "./presentation/components/Dialog";
 import { persistentParticipantsInMatch, persistentStatisticsPlayers } from "./presentation/statistics/statisticsCorpus";
 import { usePreferences } from "./presentation/hooks/usePreferences";
+import { useLastSetup } from "./presentation/hooks/useLastSetup";
+import { summarizeToday } from "./domain/statistics/todaySummary";
 import "./presentation/styles.css";
 import "./presentation/concept-overrides.css";
 import "./presentation/active-game.css";
 import "./presentation/statistics.css";
 import "./presentation/stage3.css";
 import "./presentation/stage4.css";
+import "./presentation/stage46.css";
 
 type Screen = "home" | "game" | "history" | "statistics" | "settings";
+const HistoryPage = lazy(() => import("./presentation/pages/HistoryPage").then((module) => ({ default: module.HistoryPage })));
+const StatisticsPage = lazy(() => import("./presentation/pages/StatisticsPage").then((module) => ({ default: module.StatisticsPage })));
+const screenFallback = <main className="loading secondary-screen-loading">Открываем раздел…</main>;
 
 function playersForMatches(saved: readonly Player[], matches: readonly Match[]): readonly Player[] {
   const byId = new Map(saved.map((player) => [player.id, player]));
@@ -52,11 +56,13 @@ export default function App() {
     onShowHome: showHome,
     onSessionClosed: company.syncAfterMatch,
   });
-
-  if (company.loading || match.loading) return <main className="loading">Загружаем дартс…</main>;
-
+  const lastSetup = useLastSetup(services.lastSetups, company.company?.token);
   const visibleHistory = company.company ? company.history : match.history;
   const savedPlayers = company.company ? company.players : match.players;
+  const persistentIds = useMemo(() => savedPlayers.map((player) => player.id), [savedPlayers]);
+  const today = useMemo(() => summarizeToday(visibleHistory, persistentIds, new Date()), [persistentIds, visibleHistory]);
+
+  if (company.loading || match.loading || lastSetup.loading) return <main className="loading">Загружаем дартс…</main>;
   const fatal = match.error ?? company.error;
 
   if (screen === "game" && match.active) {
@@ -84,10 +90,10 @@ export default function App() {
     );
   }
   if (screen === "history") {
-    return <HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} persistentPlayerIds={savedPlayers.map((player) => player.id)} onBack={showHome} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, savedPlayers); } catch (cause) { match.setError(cause instanceof Error ? cause.message : "Не удалось начать новый матч"); showHome(); } }} />;
+    return <Suspense fallback={screenFallback}><HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} persistentPlayerIds={persistentIds} onBack={showHome} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, savedPlayers); } catch (cause) { match.setError(cause instanceof Error ? cause.message : "Не удалось начать новый матч"); showHome(); } }} /></Suspense>;
   }
   if (screen === "statistics") {
-    return <StatisticsPage matches={visibleHistory} players={persistentStatisticsPlayers(savedPlayers, visibleHistory)} initialPlayerIds={statisticsContext} onBack={showHome} />;
+    return <Suspense fallback={screenFallback}><StatisticsPage matches={visibleHistory} players={persistentStatisticsPlayers(savedPlayers, visibleHistory)} initialPlayerIds={statisticsContext} onBack={showHome} /></Suspense>;
   }
   if (screen === "settings") {
     return <SettingsPage onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} hapticsSupported={typeof navigator.vibrate === "function"} hapticsEnabled={preferences.hapticsEnabled} onHaptics={preferences.setHapticsEnabled} />;
@@ -115,8 +121,14 @@ export default function App() {
         </aside>
       ) : null}
       <SetupPage
+        key={lastSetup.context}
         saved={savedPlayers}
-        onStart={match.start}
+        initialSetup={lastSetup.template}
+        today={today}
+        onStart={async (participants, setup) => {
+          await lastSetup.remember(participants, setup);
+          await match.start(participants, setup);
+        }}
         onHistory={() => setScreen("history")}
         onStatistics={() => { setStatisticsContext([]); setScreen("statistics"); }}
         onAddLocalPlayer={company.company ? undefined : match.addPlayer}
