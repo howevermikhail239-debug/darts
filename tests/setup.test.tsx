@@ -23,14 +23,21 @@ describe("SetupPage participants", () => {
     await waitFor(() => expect(onStart).toHaveBeenCalledWith([{ name: "Миша", playerId: "saved-id" }, { name: "Игрок 2" }], expect.anything()));
   });
 
-  it("creates a local persistent profile explicitly without converting temporary participants", async () => {
+  it("creates and selects a local persistent profile directly in its participant slot", async () => {
     const onAddLocalPlayer = vi.fn().mockResolvedValue({ id: "profile-id", name: "Миша", createdAt: "2026-01-01" });
     render(<SetupPage saved={[]} onStart={vi.fn()} onHistory={() => undefined} onStatistics={() => undefined} onAddLocalPlayer={onAddLocalPlayer} />);
-    fireEvent.click(screen.getByRole("button", { name: "+ Сохранить профиль игрока" }));
-    fireEvent.change(screen.getByLabelText("Имя нового профиля"), { target: { value: " Миша " } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить профиль" }));
-    await waitFor(() => expect(onAddLocalPlayer).toHaveBeenCalledWith(" Миша "));
-    expect(screen.getByLabelText("Имя игрока 1")).toHaveValue("Игрок 1");
+    fireEvent.click(screen.getAllByRole("button", { name: "Создать профиль" })[0]!);
+    fireEvent.change(screen.getByLabelText("Имя профиля"), { target: { value: " Миша " } });
+    fireEvent.click(screen.getByRole("button", { name: "Создать и выбрать" }));
+    await waitFor(() => expect(onAddLocalPlayer).toHaveBeenCalledWith("Миша"));
+    expect(await screen.findByText("Профиль игрока · статистика сохраняется")).toBeInTheDocument();
+    expect(screen.getAllByText("Миша")).toHaveLength(2);
+  });
+
+  it("offers an explicit conversion of an edited temporary participant", () => {
+    render(<SetupPage saved={[]} onStart={vi.fn()} onHistory={() => undefined} onStatistics={() => undefined} onAddLocalPlayer={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Имя игрока 1"), { target: { value: "Гость" } });
+    expect(screen.getByRole("button", { name: "Сохранить как профиль" })).toBeInTheDocument();
   });
 
   it("protects company creation from duplicate submits and keeps the name for a retry", async () => {

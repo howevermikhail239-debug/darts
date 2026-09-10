@@ -87,9 +87,11 @@ async function installSavedProfiles(page: import("@playwright/test").Page) {
 }
 
 async function createLocalProfile(page: import("@playwright/test").Page, name: string) {
-  await page.getByRole('button', { name: '+ Сохранить профиль игрока' }).click();
-  await page.getByLabel('Имя нового профиля').fill(name);
-  await page.getByRole('button', { name: 'Сохранить профиль', exact: true }).click();
+  const temporary = page.locator('.participant-card.temporary').first();
+  const card = await temporary.count() ? temporary : page.locator('.participant-card').first();
+  await card.getByRole('button', { name: /Создать профиль|Создать другой профиль|Сохранить как профиль/ }).click();
+  await card.getByLabel('Имя профиля').fill(name);
+  await card.getByRole('button', { name: 'Создать и выбрать' }).click();
   await expect(page.getByLabel('Выбрать сохранённого игрока 1').locator('option', { hasText: name })).toHaveCount(1);
 }
 
@@ -965,6 +967,50 @@ test('Stage 4.5 local rematch starts immediately with a new id, stable profiles 
   expect(second.id).not.toBe(first.id); expect(second.players).toEqual(first.players); expect(second.starter).toBe(1);
   await page.getByRole('button', { name: 'На главный экран' }).click(); await page.getByRole('button', { name: 'История' }).click();
   await expect(page.locator('.history-match')).toHaveCount(1);
+});
+
+test('Stage 4.5.1 creates two persistent profiles in Setup and aggregates them through a rematch', async ({ page }) => {
+  await page.goto('/');
+
+  await createLocalProfile(page, 'Миша');
+  await createLocalProfile(page, 'Саша');
+  await expect(page.locator('.participant-card.profile')).toHaveCount(2);
+  await expect(page.getByText('Профиль игрока · статистика сохраняется')).toHaveCount(2);
+  await expect(page.getByLabel('Выбрать сохранённого игрока 1')).toHaveValue(/.+/);
+  await expect(page.getByLabel('Выбрать сохранённого игрока 2')).toHaveValue(/.+/);
+
+  await page.getByRole('button', { name: 'Серия' }).click();
+  await page.getByRole('button', { name: 'Другое' }).click();
+  await page.getByLabel('Другое количество подходов').fill('1');
+  await page.getByRole('button', { name: 'Начать' }).click();
+  const first = await activeMatchIdentity(page);
+  await scoringVisit(page, 20);
+  await missVisit(page);
+  await expect(page.getByRole('heading', { name: 'Миша победил' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Статистика' }).click();
+  await expect(page.getByText('Совместных матчей: 1')).toBeVisible();
+  await page.getByRole('button', { name: 'К игрокам' }).click();
+  await expect(page.getByRole('button', { name: /Миша/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Саша/ })).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Назад' }).click();
+  await page.getByRole('button', { name: 'История' }).click();
+  await page.locator('.history-match').first().getByText('Миша — Саша').click();
+  await page.getByRole('button', { name: 'Сыграть ещё раз' }).click();
+  await expect(page.getByText('Текущий подход: Саша')).toBeVisible();
+  const second = await activeMatchIdentity(page);
+  expect(second.id).not.toBe(first.id);
+  expect(second.players).toEqual(first.players);
+
+  await scoringVisit(page, 19);
+  await missVisit(page);
+  await expect(page.getByRole('heading', { name: 'Саша победил' })).toBeVisible();
+  await page.getByRole('button', { name: 'Статистика' }).click();
+  await expect(page.getByText('Совместных матчей: 2')).toBeVisible();
+  await page.getByRole('button', { name: 'К игрокам' }).click();
+  await expect(page.getByRole('button', { name: /Миша/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Саша/ })).toHaveCount(1);
 });
 
 test('Stage 4.5 temporary rematch recreates only temporary identity and never creates a statistics profile', async ({ page }) => {

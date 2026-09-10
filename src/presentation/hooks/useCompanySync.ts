@@ -114,9 +114,10 @@ export function useCompanySync({ sync, cache }: Dependencies) {
 
   const addPlayer = useCallback(async (name: string) => {
     const token = currentToken.current;
-    if (!token) return;
+    if (!token) throw new Error("Компания не выбрана");
     const player = await sync.addPlayer(token, name);
     if (currentToken.current === token) setPlayers((current) => [...current, player]);
+    return player;
   }, [sync]);
 
   const leaveCompany = useCallback(() => {

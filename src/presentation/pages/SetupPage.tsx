@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { MatchSetup } from "../../domain/match/createMatch";
 import type { MatchParticipantInput } from "../../application/StartMatch";
 import type { Player, PlayerId } from "../../domain/match/models";
+import { PlayerIdentity } from "../components/PlayerIdentity";
 import { t } from "../strings";
 
 export type SetupParticipant = MatchParticipantInput;
@@ -14,7 +15,7 @@ type Props = {
   onAddLocalPlayer?: ((name: string) => Promise<Player>) | undefined;
   company?: { name: string } | undefined;
   onCreateCompany?: ((name: string) => Promise<void>) | undefined;
-  onAddSharedPlayer?: ((name: string) => Promise<void>) | undefined;
+  onAddSharedPlayer?: ((name: string) => Promise<Player>) | undefined;
   onLeaveCompany?: (() => void) | undefined;
   onRetry?: (() => Promise<void>) | undefined;
   syncNote?: string | undefined;
@@ -32,6 +33,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
   const [custom, setCustom] = useState(false);
   const [starter, setStarter] = useState<number | "random">(0);
   const [busy, setBusy] = useState(false);
+  const createProfile = company ? onAddSharedPlayer : onAddLocalPlayer;
 
   const selectedIds = participants.flatMap((participant) => participant.playerId ? [participant.playerId] : []);
   const participantsValid = participants.every((participant) => participant.name.trim()) && new Set(selectedIds).size === selectedIds.length;
@@ -64,11 +66,11 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
           participants={participants}
           saved={saved}
           profileLabel={company ? "Профиль компании" : "Профиль игрока"}
+          onCreateProfile={createProfile}
           onChange={setParticipants}
           onRemove={(index) => { setParticipants((current) => current.filter((_, itemIndex) => itemIndex !== index)); setStarter(0); }}
           onAdd={() => setParticipants((current) => [...current, defaultParticipant(current.length)])}
         />
-        {onAddLocalPlayer ? <LocalProfileCreator onCreate={onAddLocalPlayer} /> : null}
         {!participantsValid ? <p className="reason">Имена должны быть заполнены, а сохранённый профиль нельзя выбрать дважды.</p> : null}
         {visitsRequired && !visitsValid ? <p className="reason">Количество подходов должно быть от 1 до 999.</p> : null}
         <div className="setup-section-title"><span>2</span><div><h2>Правила матча</h2><p>Главные параметры — без лишних шагов</p></div></div>
@@ -84,35 +86,6 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
       <nav className="home-links"><button className="link-button" onClick={onHistory}>{t.history}</button><button className="link-button" onClick={onStatistics}>Статистика</button></nav>
     </main>
   );
-}
-
-function LocalProfileCreator({ onCreate }: { onCreate: (name: string) => Promise<Player> }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const create = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (busy || !name.trim()) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      await onCreate(name);
-      setName("");
-      setOpen(false);
-    } catch {
-      setError("Не удалось сохранить профиль. Попробуйте ещё раз.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (!open) return <button type="button" className="link-button profile-create-toggle" onClick={() => setOpen(true)}>+ Сохранить профиль игрока</button>;
-  return <form className="profile-create-form" onSubmit={(event) => void create(event)} aria-busy={busy}>
-    <p className="hint">Профиль сохранит общую статистику этого игрока между матчами.</p>
-    <label>Имя нового профиля<input value={name} maxLength={80} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
-    {error ? <p className="reason" role="alert">{error}</p> : null}
-    <div className="profile-create-actions"><button type="submit" className="secondary" disabled={busy || !name.trim()}>{busy ? "Сохраняем…" : "Сохранить профиль"}</button><button type="button" className="link-button" disabled={busy} onClick={() => { setOpen(false); setError(undefined); }}>Отмена</button></div>
-  </form>;
 }
 
 function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry }: Pick<Props, "company" | "syncNote" | "onCreateCompany" | "onAddSharedPlayer" | "onLeaveCompany" | "onRetry">) {
@@ -164,18 +137,57 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
   );
 }
 
-function ParticipantList({ participants, saved, profileLabel, onChange, onRemove, onAdd }: { participants: readonly ParticipantDraft[]; saved: readonly Player[]; profileLabel: string; onChange: (participants: ParticipantDraft[]) => void; onRemove: (index: number) => void; onAdd: () => void }) {
+function ParticipantList({ participants, saved, profileLabel, onCreateProfile, onChange, onRemove, onAdd }: { participants: readonly ParticipantDraft[]; saved: readonly Player[]; profileLabel: string; onCreateProfile?: ((name: string) => Promise<Player>) | undefined; onChange: (participants: ParticipantDraft[]) => void; onRemove: (index: number) => void; onAdd: () => void }) {
   return <><div className="player-fields">{participants.map((participant, index) => (
-    <ParticipantRow key={index} participant={participant} index={index} saved={saved} profileLabel={profileLabel} removable={participants.length > 2} onChange={(next) => onChange(participants.map((item, itemIndex) => itemIndex === index ? next : item))} onRemove={() => onRemove(index)} />
+    <ParticipantRow key={index} participant={participant} index={index} saved={saved} profileLabel={profileLabel} onCreateProfile={onCreateProfile} removable={participants.length > 2} onChange={(next) => onChange(participants.map((item, itemIndex) => itemIndex === index ? next : item))} onRemove={() => onRemove(index)} />
   ))}</div>{participants.length < 8 ? <button type="button" className="secondary add-player" onClick={onAdd}>+ Добавить игрока</button> : null}</>;
 }
 
-function ParticipantRow({ participant, index, saved, profileLabel, removable, onChange, onRemove }: { participant: ParticipantDraft; index: number; saved: readonly Player[]; profileLabel: string; removable: boolean; onChange: (participant: ParticipantDraft) => void; onRemove: () => void }) {
+function ParticipantRow({ participant, index, saved, profileLabel, onCreateProfile, removable, onChange, onRemove }: { participant: ParticipantDraft; index: number; saved: readonly Player[]; profileLabel: string; onCreateProfile?: ((name: string) => Promise<Player>) | undefined; removable: boolean; onChange: (participant: ParticipantDraft) => void; onRemove: () => void }) {
+  const [creating, setCreating] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const selected = participant.playerId
+    ? saved.find((player) => player.id === participant.playerId) ?? { id: participant.playerId, name: participant.name, createdAt: "" }
+    : undefined;
+  const openCreator = () => {
+    const defaultName = `Игрок ${index + 1}`;
+    setProfileName(participant.name === defaultName ? "" : participant.name);
+    setError(undefined);
+    setCreating(true);
+  };
+  const createAndSelect = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!onCreateProfile || busy || !profileName.trim()) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const player = await onCreateProfile(profileName.trim());
+      onChange({ name: player.name, playerId: player.id });
+      setCreating(false);
+    } catch {
+      setError("Не удалось создать профиль. Попробуйте ещё раз.");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <label><span className="participant-label">Игрок {index + 1}{participant.playerId ? <em>{profileLabel}</em> : <em>Временный</em>}</span><span className="input-row">
-      <input aria-label={`Имя игрока ${index + 1}`} value={participant.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={28} />
-      {removable ? <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>×</button> : null}
-    </span>{saved.length ? <select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); if (player) onChange({ name: player.name, playerId: player.id }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select> : null}</label>
+    <article className={`participant-card ${selected ? "profile" : "temporary"}`}>
+      <div className="participant-card-heading"><span>Игрок {index + 1}</span>{removable ? <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>×</button> : null}</div>
+      {selected ? <div className="selected-profile"><PlayerIdentity playerId={selected.id} name={selected.name} position={index} /><small>{profileLabel} · статистика сохраняется</small></div> : <>
+        <label className="temporary-name">Имя для этого матча<input aria-label={`Имя игрока ${index + 1}`} value={participant.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={28} /></label>
+        <p className="participant-semantic">Временный игрок · статистика только этого матча</p>
+      </>}
+      {saved.length ? <label className="profile-picker">{selected ? "Сменить игрока" : "Выбрать профиль"}<select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); onChange(player ? { name: player.name, playerId: player.id } : { name: `Игрок ${index + 1}` }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label> : null}
+      {onCreateProfile && !creating ? <button type="button" className="profile-slot-action" onClick={openCreator}>{selected ? "Создать другой профиль" : participant.name === `Игрок ${index + 1}` ? "Создать профиль" : "Сохранить как профиль"}</button> : null}
+      {creating ? <form className="slot-profile-form" onSubmit={(event) => void createAndSelect(event)} aria-busy={busy}>
+        <label>Имя профиля<input autoFocus value={profileName} maxLength={80} disabled={busy} onChange={(event) => setProfileName(event.target.value)} /></label>
+        <p>Профиль сохранит статистику между матчами.</p>
+        {error ? <p className="reason" role="alert">{error}</p> : null}
+        <div><button type="submit" className="secondary" disabled={busy || !profileName.trim()}>{busy ? "Создаём…" : "Создать и выбрать"}</button><button type="button" className="quiet-button" disabled={busy} onClick={() => setCreating(false)}>Отмена</button></div>
+      </form> : null}
+    </article>
   );
 }
 
