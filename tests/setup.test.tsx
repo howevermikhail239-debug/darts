@@ -22,4 +22,25 @@ describe("SetupPage participants", () => {
     fireEvent.click(screen.getByRole("button", { name: "Начать" }));
     await waitFor(() => expect(onStart).toHaveBeenCalledWith([{ name: "Миша", playerId: "saved-id" }, { name: "Игрок 2" }], expect.anything()));
   });
+
+  it("protects company creation from duplicate submits and keeps the name for a retry", async () => {
+    let rejectCreation: ((cause: Error) => void) | undefined;
+    const onCreateCompany = vi.fn(() => new Promise<void>((_, reject) => { rejectCreation = reject; }));
+    render(<SetupPage saved={[]} onStart={vi.fn()} onHistory={() => undefined} onStatistics={() => undefined} onCreateCompany={onCreateCompany} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Создать компанию" }));
+    fireEvent.change(screen.getByLabelText("Название компании (необязательно)"), { target: { value: "Наша лига" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Создать$/ }));
+
+    const busy = await screen.findByRole("button", { name: "Создаём компанию…" });
+    expect(busy).toBeDisabled();
+    fireEvent.click(busy);
+    expect(onCreateCompany).toHaveBeenCalledTimes(1);
+    rejectCreation?.(new Error("technical details"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось создать компанию. Проверьте подключение и попробуйте ещё раз.");
+    expect(screen.queryByText("technical details")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Название компании (необязательно)")).toHaveValue("Наша лига");
+    expect(screen.getByRole("button", { name: /^Создать$/ })).toBeEnabled();
+  });
 });

@@ -82,6 +82,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .sync-state { display: flex; align-items: center; gap: 7px; color: var(--muted); }
 .sync-state::before { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--info); content: ""; }
 .sync-state.saved::before { background: var(--success); }
+.company-create-form { display: grid; gap: 10px; }
+.company-create-form label { display: grid; gap: 6px; }
+.company-guidance { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.company-create-error { margin: 0; padding: 10px 12px; color: #ffd3d0; border-left: 4px solid var(--danger); border-radius: var(--radius-sm); background: #3a2025; }
 .setup-form { gap: 14px; }
 .setup-section-title { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 .setup-section-title:first-child { margin-top: 0; padding-top: 0; border: 0; }

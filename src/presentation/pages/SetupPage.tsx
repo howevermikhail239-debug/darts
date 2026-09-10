@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { MatchSetup } from "../../domain/match/createMatch";
 import type { MatchParticipantInput } from "../../application/StartMatch";
 import type { Player, PlayerId } from "../../domain/match/models";
@@ -87,11 +87,30 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
   const [companyName, setCompanyName] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [creatingCompany, setCreatingCompany] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string>();
+
+  const createCompany = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!onCreateCompany || createBusy) return;
+    setCreateBusy(true);
+    setCreateError(undefined);
+    try {
+      await onCreateCompany(companyName.trim());
+    } catch {
+      setCreateError("Не удалось создать компанию. Проверьте подключение и попробуйте ещё раз.");
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
   if (company) return (
     <section className="company-context" aria-label="Компания">
       <div className="context-heading"><span className="context-icon" aria-hidden="true">◆</span><div><b>Компания{company.name ? ` · ${company.name}` : ""}</b><small>Общие профили, история и статистика</small></div></div>
       <span className={syncNote ? "sync-state pending" : "sync-state saved"} role="status">{syncNote ?? "Все матчи синхронизированы"}</span>
-      <button className="link-button" onClick={() => void navigator.clipboard?.writeText(location.href)}>Пригласить: скопировать ссылку</button>
+      <p className="company-guidance">Добавьте постоянных игроков ниже или сразу настройте и начните матч.</p>
+      <p className="company-guidance">Чтобы открыть эту же компанию на другом устройстве, отправьте игрокам ссылку-приглашение.</p>
+      <button className="link-button" onClick={() => void navigator.clipboard?.writeText(location.href)}>Скопировать ссылку для приглашения</button>
       {syncNote ? <button className="link-button" onClick={() => void onRetry?.()}>Повторить</button> : null}
       <button className="link-button" onClick={onLeaveCompany}>Это устройство</button>
       <label>Добавить игрока компании<input value={playerName} maxLength={80} onChange={(event) => setPlayerName(event.target.value)} /></label>
@@ -99,9 +118,16 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
     </section>
   );
   return (
-    <section className="company-context">
+    <section className="company-context" aria-label="Создание компании">
       <div className="context-heading"><span className="context-icon" aria-hidden="true">●</span><div><b>Локальная игра</b><small>Матчи хранятся только на этом устройстве</small></div></div>
-      {creatingCompany ? <><label>Название компании (необязательно)<input value={companyName} maxLength={80} onChange={(event) => setCompanyName(event.target.value)} /></label><button className="secondary" onClick={() => void onCreateCompany?.(companyName)}>Создать</button></> : <button className="secondary" onClick={() => setCreatingCompany(true)}>Создать компанию</button>}
+      {creatingCompany ? (
+        <form className="company-create-form" onSubmit={(event) => void createCompany(event)} aria-busy={createBusy}>
+          <p className="company-guidance">Создайте общее пространство для игроков, матчей и статистики. После создания здесь появятся название, приглашение и следующий шаг.</p>
+          <label>Название компании (необязательно)<input value={companyName} maxLength={80} disabled={createBusy} onChange={(event) => setCompanyName(event.target.value)} /></label>
+          {createError ? <p className="company-create-error" role="alert">{createError}</p> : null}
+          <button type="submit" className="primary" disabled={createBusy || !onCreateCompany}>{createBusy ? "Создаём компанию…" : "Создать"}</button>
+        </form>
+      ) : <button className="secondary" onClick={() => setCreatingCompany(true)}>Создать компанию</button>}
     </section>
   );
 }

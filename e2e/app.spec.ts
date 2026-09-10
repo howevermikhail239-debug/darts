@@ -625,6 +625,35 @@ test("aggregate input confirms a full 100-point visit without fabricated dart de
   await expect(page.locator(".main-score").first()).toHaveText("401");
 });
 
+test("company creation through UI is visible, survives reload, and exists on a second device", async ({ browser }) => {
+  const creatorContext = await browser.newContext();
+  const invitedContext = await browser.newContext();
+  const name = `UI-лига-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    const creator = await creatorContext.newPage();
+    await creator.goto("/");
+    await creator.getByRole("button", { name: "Создать компанию" }).click();
+    await creator.getByLabel("Название компании (необязательно)").fill(name);
+    await creator.getByRole("button", { name: "Создать", exact: true }).click();
+
+    await expect(creator.getByText(`Компания · ${name}`)).toBeVisible();
+    await expect(creator.getByText("Добавьте постоянных игроков ниже или сразу настройте и начните матч.")).toBeVisible();
+    await expect(creator.getByRole("button", { name: "Начать" })).toBeVisible();
+    const companyUrl = creator.url();
+    expect(new URL(companyUrl).pathname).toMatch(/^\/g\/[^/]+$/);
+
+    await creator.reload();
+    await expect(creator.getByText(`Компания · ${name}`)).toBeVisible();
+
+    const invited = await invitedContext.newPage();
+    await invited.goto(companyUrl);
+    await expect(invited.getByText(`Компания · ${name}`)).toBeVisible();
+  } finally {
+    await creatorContext.close();
+    await invitedContext.close();
+  }
+});
+
 test("two isolated devices share a company player through its secret link", async ({ browser }) => {
   const deviceA = await browser.newContext();
   const deviceB = await browser.newContext();
