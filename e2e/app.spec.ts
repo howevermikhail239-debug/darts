@@ -86,6 +86,25 @@ async function installSavedProfiles(page: import("@playwright/test").Page) {
   await page.reload();
 }
 
+async function createLocalProfile(page: import("@playwright/test").Page, name: string) {
+  await page.getByRole('button', { name: '+ Сохранить профиль игрока' }).click();
+  await page.getByLabel('Имя нового профиля').fill(name);
+  await page.getByRole('button', { name: 'Сохранить профиль', exact: true }).click();
+  await expect(page.getByLabel('Выбрать сохранённого игрока 1').locator('option', { hasText: name })).toHaveCount(1);
+}
+
+async function startOneVisitSeriesWithProfiles(page: import("@playwright/test").Page, names: readonly string[]) {
+  await page.goto('/');
+  for (let count = 2; count < names.length; count += 1) await page.getByRole('button', { name: '+ Добавить игрока' }).click();
+  for (let index = 0; index < names.length; index += 1) {
+    await page.getByLabel(`Выбрать сохранённого игрока ${index + 1}`).selectOption({ label: names[index] });
+  }
+  await page.getByRole('button', { name: 'Серия' }).click();
+  await page.getByRole('button', { name: 'Другое' }).click();
+  await page.getByLabel('Другое количество подходов').fill('1');
+  await page.getByRole('button', { name: 'Начать' }).click();
+}
+
 async function missVisit(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Мимо" }).click();
   await page.getByRole("button", { name: "Мимо" }).click();
@@ -527,7 +546,10 @@ test("abandon clears an unconfirmed draft without adding it to history", async (
 });
 
 test("statistics shows confirmed scoring, hits, reload persistence and mobile-safe layout", async ({ page }) => {
-  await startOneVisitSeries(page);
+  await page.goto('/');
+  await createLocalProfile(page, 'Игрок 1');
+  await createLocalProfile(page, 'Игрок 2');
+  await startOneVisitSeriesWithProfiles(page, ['Игрок 1', 'Игрок 2']);
   await page.getByRole("button", { name: "×3" }).click();
   await page.getByRole("button", { name: "Сектор 20, множитель 3" }).click();
   await page.getByRole("button", { name: "Мимо" }).click();
@@ -576,7 +598,11 @@ test("a second match can reuse saved player ids, announces a real record and pro
 
 test("comparison counts a multiplayer third-player winner as an other-player result", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await startOneVisitSeries(page, 3);
+  await page.goto('/');
+  await createLocalProfile(page, 'Игрок 1');
+  await createLocalProfile(page, 'Игрок 2');
+  await createLocalProfile(page, 'Игрок 3');
+  await startOneVisitSeriesWithProfiles(page, ['Игрок 1', 'Игрок 2', 'Игрок 3']);
   await missVisit(page);
   await missVisit(page);
   await scoringVisit(page, 20);
@@ -758,6 +784,109 @@ test('company match keeps temporary participant out of shared player catalog', a
     await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'Завершить' }).click();
     const b = await bContext.newPage(); await b.goto(url); await expect(b.getByLabel('Выбрать сохранённого игрока 1').locator('option')).toHaveCount(2); await b.getByRole('button', { name: 'История' }).click(); await expect(b.getByText('Миша — Игрок 2')).toBeVisible();
   } finally { await aContext.close(); await bContext.close(); }
+});
+
+test('repeated temporary matches stay readable without creating statistics profiles', async ({ page }) => {
+  for (let matchIndex = 0; matchIndex < 2; matchIndex += 1) {
+    await startOneVisitSeries(page);
+    await scoringVisit(page, 20);
+    await missVisit(page);
+    await expect(page.getByRole('heading', { name: 'Игрок 1 победил' })).toBeVisible();
+    await page.getByRole('button', { name: 'Статистика' }).click();
+    await expect(page.getByText('Здесь появится накопительная статистика профилей. Временные участники остаются доступны в истории матчей.')).toBeVisible();
+    await page.getByRole('button', { name: 'Назад' }).click();
+  }
+
+  await page.getByRole('button', { name: 'История' }).click();
+  await expect(page.locator('.history-match')).toHaveCount(2);
+  await expect(page.getByText('Игрок 1 — Игрок 2')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Назад' }).click();
+  await page.getByRole('button', { name: 'Статистика' }).click();
+  await expect(page.getByRole('button', { name: /Игрок [12]/ })).toHaveCount(0);
+});
+
+test('stable local profile ids aggregate across matches and completed match opens relevant statistics', async ({ page }) => {
+  await page.goto('/');
+  await createLocalProfile(page, 'Миша');
+  await createLocalProfile(page, 'Саша');
+  for (let matchIndex = 0; matchIndex < 2; matchIndex += 1) {
+    await page.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' });
+    await page.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Саша' });
+    await page.getByRole('button', { name: 'Серия' }).click();
+    await page.getByRole('button', { name: 'Другое' }).click();
+    await page.getByLabel('Другое количество подходов').fill('1');
+    await page.getByRole('button', { name: 'Начать' }).click();
+    await scoringVisit(page, matchIndex === 0 ? 20 : 19);
+    await missVisit(page);
+    await page.getByRole('button', { name: 'Статистика' }).click();
+    await expect(page.getByRole('heading', { name: 'Личные встречи' })).toBeVisible();
+    if (matchIndex === 0) {
+      await page.getByRole('button', { name: 'Назад' }).click();
+    }
+  }
+
+  await expect(page.getByText('Совместных матчей: 2')).toBeVisible();
+  await page.getByRole('button', { name: 'К игрокам' }).click();
+  await expect(page.getByRole('button', { name: /Миша/ })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Саша/ })).toHaveCount(1);
+  await page.getByRole('button', { name: /Миша/ }).click();
+  await page.getByRole('button', { name: 'Динамика' }).click();
+  await expect(page.getByLabel('Среднее за 3 дротика', { exact: true })).toBeVisible();
+
+  const playerIdsByMatch = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('dart-scorekeeper', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const matches = await new Promise<Array<{ players: string[] }>>((resolve, reject) => {
+      const request = database.transaction('matches').objectStore('matches').getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return matches.map((match) => match.players);
+  });
+  expect(playerIdsByMatch).toHaveLength(2);
+  expect(playerIdsByMatch[0]).toEqual(playerIdsByMatch[1]);
+  expect(new Set(playerIdsByMatch.flat()).size).toBe(2);
+
+  await page.reload();
+  await expect(page.getByText('Продолжить матч')).toHaveCount(0);
+  await page.getByRole('button', { name: 'История' }).click();
+  await expect(page.locator('.history-match')).toHaveCount(2);
+});
+
+test('company persistent plus temporary match opens profile statistics without inventing a shared profile', async ({ browser }) => {
+  const deviceA = await browser.newContext();
+  const deviceB = await browser.newContext();
+  try {
+    const a = await deviceA.newPage();
+    await createCompanyWithPlayers(a, 'Смешанная лига', ['Миша']);
+    const companyUrl = a.url();
+    await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' });
+    await oneVisitSeries(a, 20, 0);
+    await expect(a.getByRole('heading', { name: 'Миша победил' })).toBeVisible();
+    await a.getByRole('button', { name: 'Статистика' }).click();
+    await expect(a.getByRole('heading', { name: 'Миша', exact: true })).toBeVisible();
+    await expect(a.getByText('Завершённые игры').locator('..').getByText('1', { exact: true })).toBeVisible();
+    await a.getByRole('button', { name: 'Все игроки' }).click();
+    await expect(a.getByRole('button', { name: /Миша/ })).toHaveCount(1);
+    await expect(a.getByRole('button', { name: /Игрок 2/ })).toHaveCount(0);
+
+    const b = await deviceB.newPage();
+    await b.goto(companyUrl);
+    await expect(b.getByLabel('Выбрать сохранённого игрока 1').locator('option')).toHaveCount(2);
+    await b.getByRole('button', { name: 'История' }).click();
+    await expect(b.getByText('Миша — Игрок 2')).toBeVisible();
+    await b.getByRole('button', { name: 'Назад' }).click();
+    await b.getByRole('button', { name: 'Статистика' }).click();
+    await expect(b.getByRole('button', { name: /Миша/ })).toHaveCount(1);
+    await expect(b.getByRole('button', { name: /Игрок 2/ })).toHaveCount(0);
+  } finally {
+    await deviceA.close();
+    await deviceB.close();
+  }
 });
 
 test('stage 4 viewport matrix has no page overflow or clipped primary controls', async ({ page }) => {

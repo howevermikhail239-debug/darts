@@ -202,6 +202,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .resume { width: min(720px, calc(100% - 28px)); grid-template-columns: 1fr auto auto; border-color: var(--info); border-radius: var(--radius-md); background: var(--surface); }
 
 /* History, statistics and completion */
+.summary-actions .primary { grid-column: 1 / -1; }
+.profile-create-toggle { margin: -8px 0 0; justify-self: start; }
+.profile-create-form { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.profile-create-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.profile-create-actions .link-button { margin: 0; }
 .history-page header, .stats-header, .settings-page header { min-height: 52px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
 .history-page header h1, .stats-header h1, .settings-page h1 { font-size: 26px; letter-spacing: -.025em; }
 .history-match { margin: 9px 0; border-color: var(--line); border-radius: var(--radius-md); background: var(--surface); content-visibility: auto; }

@@ -9,7 +9,7 @@ type ActiveSession = Readonly<{ session: GameSession; snapshot: SessionSnapshot 
 type PendingStart = Readonly<{ participants: readonly SetupParticipant[]; setup: MatchSetup }>;
 type Dependencies = Readonly<{
   matches: MatchRepository;
-  players: Pick<PlayerRepository, "list">;
+  players: PlayerRepository;
   id: IdGenerator;
   now: Clock;
   startMatch(participants: readonly SetupParticipant[], setup: MatchSetup, companyToken?: string): Promise<{ session: GameSession }>;
@@ -70,6 +70,14 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     onShowGame();
   }, [companyToken, dependencies, onShowGame]);
 
+  const addPlayer = useCallback(async (name: string) => {
+    const player: Player = { id: dependencies.id(), name: name.trim(), createdAt: dependencies.now() };
+    if (!player.name) throw new Error("Введите имя игрока");
+    await dependencies.players.save(player);
+    setPlayers(await dependencies.players.list());
+    return player;
+  }, [dependencies]);
+
   const start = useCallback(async (participants: readonly SetupParticipant[], setup: MatchSetup) => {
     if (resume) {
       setPendingStart({ participants, setup });
@@ -126,6 +134,7 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     setError,
     setSnapshot: (snapshot: SessionSnapshot) => setActive((current) => current ? { ...current, snapshot } : current),
     start,
+    addPlayer,
     close,
     backToHome,
     continueResume,

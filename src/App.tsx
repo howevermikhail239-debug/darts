@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { Match, Player } from "./domain/match/models";
+import type { Match, Player, PlayerId } from "./domain/match/models";
 import { companySync, services } from "./app/compositionRoot";
 import { SetupPage } from "./presentation/pages/SetupPage";
 import { GamePage } from "./presentation/pages/GamePage";
@@ -10,6 +10,7 @@ import { useCompanySync } from "./presentation/hooks/useCompanySync";
 import { useMatchSession } from "./presentation/hooks/useMatchSession";
 import { toGameViewModel } from "./presentation/game/gameViewModel";
 import { Dialog } from "./presentation/components/Dialog";
+import { persistentParticipantsInMatch, persistentStatisticsPlayers } from "./presentation/statistics/statisticsCorpus";
 import "./presentation/styles.css";
 import "./presentation/concept-overrides.css";
 import "./presentation/active-game.css";
@@ -37,6 +38,7 @@ function playersForMatches(saved: readonly Player[], matches: readonly Match[]):
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
+  const [statisticsContext, setStatisticsContext] = useState<readonly PlayerId[]>([]);
   const [confirmResumeAbandon, setConfirmResumeAbandon] = useState(false);
   const showGame = useCallback(() => setScreen("game"), []);
   const showHome = useCallback(() => setScreen("home"), []);
@@ -67,6 +69,12 @@ export default function App() {
         onChange={match.setSnapshot}
         onBack={match.backToHome}
         onClosed={() => void match.close()}
+        onStatistics={async (completedMatch) => {
+          const relevantPlayers = persistentParticipantsInMatch(savedPlayers, completedMatch);
+          await match.close();
+          setStatisticsContext(relevantPlayers);
+          setScreen("statistics");
+        }}
       />
     );
   }
@@ -74,7 +82,7 @@ export default function App() {
     return <HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} onBack={showHome} />;
   }
   if (screen === "statistics") {
-    return <StatisticsPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} onBack={showHome} />;
+    return <StatisticsPage matches={visibleHistory} players={persistentStatisticsPlayers(savedPlayers, visibleHistory)} initialPlayerIds={statisticsContext} onBack={showHome} />;
   }
   if (screen === "settings") {
     return <SettingsPage onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} />;
@@ -105,7 +113,8 @@ export default function App() {
         saved={savedPlayers}
         onStart={match.start}
         onHistory={() => setScreen("history")}
-        onStatistics={() => setScreen("statistics")}
+        onStatistics={() => { setStatisticsContext([]); setScreen("statistics"); }}
+        onAddLocalPlayer={company.company ? undefined : match.addPlayer}
         company={company.company}
         syncNote={company.note}
         onCreateCompany={company.createCompany}

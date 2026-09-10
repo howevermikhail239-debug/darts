@@ -23,6 +23,16 @@ describe("SetupPage participants", () => {
     await waitFor(() => expect(onStart).toHaveBeenCalledWith([{ name: "Миша", playerId: "saved-id" }, { name: "Игрок 2" }], expect.anything()));
   });
 
+  it("creates a local persistent profile explicitly without converting temporary participants", async () => {
+    const onAddLocalPlayer = vi.fn().mockResolvedValue({ id: "profile-id", name: "Миша", createdAt: "2026-01-01" });
+    render(<SetupPage saved={[]} onStart={vi.fn()} onHistory={() => undefined} onStatistics={() => undefined} onAddLocalPlayer={onAddLocalPlayer} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Сохранить профиль игрока" }));
+    fireEvent.change(screen.getByLabelText("Имя нового профиля"), { target: { value: " Миша " } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить профиль" }));
+    await waitFor(() => expect(onAddLocalPlayer).toHaveBeenCalledWith(" Миша "));
+    expect(screen.getByLabelText("Имя игрока 1")).toHaveValue("Игрок 1");
+  });
+
   it("protects company creation from duplicate submits and keeps the name for a retry", async () => {
     let rejectCreation: ((cause: Error) => void) | undefined;
     const onCreateCompany = vi.fn(() => new Promise<void>((_, reject) => { rejectCreation = reject; }));

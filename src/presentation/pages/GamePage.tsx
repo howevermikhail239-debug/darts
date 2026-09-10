@@ -29,6 +29,7 @@ type Props = {
   onChange: (s: SessionSnapshot) => void;
   onBack: () => void;
   onClosed: () => void;
+  onStatistics: (match: Match) => Promise<void>;
 };
 export function GamePage({
   session,
@@ -38,6 +39,7 @@ export function GamePage({
   onChange,
   onBack,
   onClosed,
+  onStatistics,
 }: Props) {
   const [snapshot, setSnapshot] = useState(initial);
   const [multiplier, setMultiplier] = useState<Multiplier>(1);
@@ -109,6 +111,10 @@ export function GamePage({
         onFinish={async () => {
           await session.finalize();
           onClosed();
+        }}
+        onStatistics={async () => {
+          await session.finalize();
+          await onStatistics(snapshot.match);
         }}
       />
     );
@@ -239,20 +245,35 @@ function Summary({
   previousMatches,
   onUndo,
   onFinish,
+  onStatistics,
 }: {
   snapshot: SessionSnapshot;
   players: readonly Player[];
   previousMatches: readonly Match[];
   onUndo: () => Promise<void>;
   onFinish: () => Promise<void>;
+  onStatistics: () => Promise<void>;
 }) {
   const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
   const m = snapshot.match;
   const view = toGameViewModel(snapshot, players);
   const records = m.players.flatMap((playerId) => {
     const player = players.find((item) => item.id === playerId);
     return newRecordsForMatch(m, previousMatches, playerId).map((record) => ({ ...record, playerName: player?.name ?? "Игрок" }));
   });
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await action();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Ошибка сохранения");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <main className="summary-page">
       <p className="eyeline">{view.summaryEyeline}</p>
@@ -261,24 +282,25 @@ function Summary({
       {records.length > 0 ? <section className="new-records"><h2>🏆 Новый личный рекорд</h2>{records.map((record) => <p key={`${record.playerName}-${record.key}`}><span>{record.playerName} · {record.label}</span><strong>{record.percent ? `${record.value.toFixed(1)}%` : Number.isInteger(record.value) ? record.value : record.value.toFixed(1)}</strong></p>)}</section> : null}
       <section className="summary-actions">
         <button
-          className="secondary"
-          onClick={() =>
-            void onUndo().catch((e) =>
-              setError(e instanceof Error ? e.message : "Ошибка сохранения"),
-            )
-          }
-        >
-          {t.undo}
-        </button>
-        <button
           className="primary"
-          onClick={() =>
-            void onFinish().catch((e) =>
-              setError(e instanceof Error ? e.message : "Ошибка сохранения"),
-            )
-          }
+          disabled={busy}
+          onClick={() => void run(onFinish)}
         >
           {t.finish}
+        </button>
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() => void run(onStatistics)}
+        >
+          Статистика
+        </button>
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() => void run(onUndo)}
+        >
+          {t.undo}
         </button>
       </section>
       {error ? <div className="error" role="alert">{error}</div> : null}

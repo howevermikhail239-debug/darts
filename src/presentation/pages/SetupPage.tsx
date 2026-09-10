@@ -11,6 +11,7 @@ type Props = {
   onStart: (participants: readonly SetupParticipant[], setup: MatchSetup) => Promise<void>;
   onHistory: () => void;
   onStatistics: () => void;
+  onAddLocalPlayer?: ((name: string) => Promise<Player>) | undefined;
   company?: { name: string } | undefined;
   onCreateCompany?: ((name: string) => Promise<void>) | undefined;
   onAddSharedPlayer?: ((name: string) => Promise<void>) | undefined;
@@ -21,7 +22,7 @@ type Props = {
 
 const defaultParticipant = (index: number): ParticipantDraft => ({ name: `Игрок ${index + 1}` });
 
-export function SetupPage({ saved, onStart, onHistory, onStatistics, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry, syncNote }: Props) {
+export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalPlayer, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry, syncNote }: Props) {
   const [participants, setParticipants] = useState<ParticipantDraft[]>([defaultParticipant(0), defaultParticipant(1)]);
   const [mode, setMode] = useState<"x01" | "fixed_visits">("x01");
   const [x01Format, setX01Format] = useState<"unlimited" | "limited">("unlimited");
@@ -58,14 +59,16 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, company, on
       <header className="brand"><div className="brand-mark" aria-hidden="true">◎</div><div><h1>{t.newGame}</h1><p>Настройте матч — и к мишени.</p></div></header>
       <CompanyContextPanel company={company} syncNote={syncNote} onCreateCompany={onCreateCompany} onAddSharedPlayer={onAddSharedPlayer} onLeaveCompany={onLeaveCompany} onRetry={onRetry} />
       <section className="setup-form" aria-label="Настройка матча">
-        <div className="setup-section-title"><span>1</span><div><h2>Участники</h2><p>От 2 до 8 игроков</p></div></div>
+        <div className="setup-section-title"><span>1</span><div><h2>Участники</h2><p>Профиль хранит статистику между матчами. Временный игрок — только для этой игры.</p></div></div>
         <ParticipantList
           participants={participants}
           saved={saved}
+          profileLabel={company ? "Профиль компании" : "Профиль игрока"}
           onChange={setParticipants}
           onRemove={(index) => { setParticipants((current) => current.filter((_, itemIndex) => itemIndex !== index)); setStarter(0); }}
           onAdd={() => setParticipants((current) => [...current, defaultParticipant(current.length)])}
         />
+        {onAddLocalPlayer ? <LocalProfileCreator onCreate={onAddLocalPlayer} /> : null}
         {!participantsValid ? <p className="reason">Имена должны быть заполнены, а сохранённый профиль нельзя выбрать дважды.</p> : null}
         {visitsRequired && !visitsValid ? <p className="reason">Количество подходов должно быть от 1 до 999.</p> : null}
         <div className="setup-section-title"><span>2</span><div><h2>Правила матча</h2><p>Главные параметры — без лишних шагов</p></div></div>
@@ -81,6 +84,35 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, company, on
       <nav className="home-links"><button className="link-button" onClick={onHistory}>{t.history}</button><button className="link-button" onClick={onStatistics}>Статистика</button></nav>
     </main>
   );
+}
+
+function LocalProfileCreator({ onCreate }: { onCreate: (name: string) => Promise<Player> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const create = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy || !name.trim()) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onCreate(name);
+      setName("");
+      setOpen(false);
+    } catch {
+      setError("Не удалось сохранить профиль. Попробуйте ещё раз.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) return <button type="button" className="link-button profile-create-toggle" onClick={() => setOpen(true)}>+ Сохранить профиль игрока</button>;
+  return <form className="profile-create-form" onSubmit={(event) => void create(event)} aria-busy={busy}>
+    <p className="hint">Профиль сохранит общую статистику этого игрока между матчами.</p>
+    <label>Имя нового профиля<input value={name} maxLength={80} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
+    {error ? <p className="reason" role="alert">{error}</p> : null}
+    <div className="profile-create-actions"><button type="submit" className="secondary" disabled={busy || !name.trim()}>{busy ? "Сохраняем…" : "Сохранить профиль"}</button><button type="button" className="link-button" disabled={busy} onClick={() => { setOpen(false); setError(undefined); }}>Отмена</button></div>
+  </form>;
 }
 
 function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry }: Pick<Props, "company" | "syncNote" | "onCreateCompany" | "onAddSharedPlayer" | "onLeaveCompany" | "onRetry">) {
@@ -132,15 +164,15 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
   );
 }
 
-function ParticipantList({ participants, saved, onChange, onRemove, onAdd }: { participants: readonly ParticipantDraft[]; saved: readonly Player[]; onChange: (participants: ParticipantDraft[]) => void; onRemove: (index: number) => void; onAdd: () => void }) {
+function ParticipantList({ participants, saved, profileLabel, onChange, onRemove, onAdd }: { participants: readonly ParticipantDraft[]; saved: readonly Player[]; profileLabel: string; onChange: (participants: ParticipantDraft[]) => void; onRemove: (index: number) => void; onAdd: () => void }) {
   return <><div className="player-fields">{participants.map((participant, index) => (
-    <ParticipantRow key={index} participant={participant} index={index} saved={saved} removable={participants.length > 2} onChange={(next) => onChange(participants.map((item, itemIndex) => itemIndex === index ? next : item))} onRemove={() => onRemove(index)} />
+    <ParticipantRow key={index} participant={participant} index={index} saved={saved} profileLabel={profileLabel} removable={participants.length > 2} onChange={(next) => onChange(participants.map((item, itemIndex) => itemIndex === index ? next : item))} onRemove={() => onRemove(index)} />
   ))}</div>{participants.length < 8 ? <button type="button" className="secondary add-player" onClick={onAdd}>+ Добавить игрока</button> : null}</>;
 }
 
-function ParticipantRow({ participant, index, saved, removable, onChange, onRemove }: { participant: ParticipantDraft; index: number; saved: readonly Player[]; removable: boolean; onChange: (participant: ParticipantDraft) => void; onRemove: () => void }) {
+function ParticipantRow({ participant, index, saved, profileLabel, removable, onChange, onRemove }: { participant: ParticipantDraft; index: number; saved: readonly Player[]; profileLabel: string; removable: boolean; onChange: (participant: ParticipantDraft) => void; onRemove: () => void }) {
   return (
-    <label><span className="participant-label">Игрок {index + 1}{participant.playerId ? <em>Профиль компании</em> : <em>Временный</em>}</span><span className="input-row">
+    <label><span className="participant-label">Игрок {index + 1}{participant.playerId ? <em>{profileLabel}</em> : <em>Временный</em>}</span><span className="input-row">
       <input aria-label={`Имя игрока ${index + 1}`} value={participant.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={28} />
       {removable ? <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>×</button> : null}
     </span>{saved.length ? <select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); if (player) onChange({ name: player.name, playerId: player.id }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select> : null}</label>
