@@ -1,16 +1,172 @@
-:root{--accent:#b7f215;--accent2:#d9ff70;--danger:#ff655e}
-.primary{color:#10150a}
-.segments button.selected,.multipliers button.selected{background:#354515}
-.special button:nth-child(2){background:#8b1717;border-color:#e23636;color:#fff}
-.player-fields{display:grid;gap:12px}.input-row{display:flex;gap:8px}.remove-player{flex:0 0 52px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);font-size:24px}.add-player{width:100%}.starter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px}.starter-grid button{min-height:46px;border:1px solid var(--line);border-radius:7px;background:var(--surface);font-weight:750}.starter-grid button.selected{border-color:var(--accent);background:#354515}
-.scoreboard.multi{grid-template-columns:1fr}.scoreboard.multi .player-score{display:grid;grid-template-columns:70px 1fr auto 150px;align-items:center;gap:10px}.scoreboard.multi .turn-mark,.scoreboard.multi .turn-spacer{height:auto}.scoreboard.multi .main-score{font-size:34px;margin:0}.scoreboard.multi .mini-stats{border:0;padding:0}
-@media(max-width:520px){.scoreboard.multi .player-score{grid-template-columns:48px 1fr auto}.scoreboard.multi .mini-stats{display:none}.scoreboard.multi .main-score{font-size:28px}}
-@media(max-width:520px){
-  .game-header{margin-bottom:5px}.game-header .text-icon{height:36px}.player-score{padding-top:4px;padding-bottom:4px}
-  .player-score.active{padding-top:3px;padding-bottom:3px}.turn-mark,.turn-spacer{height:15px}.main-score{font-size:44px;margin:0 0 4px}
-  .mini-stats{padding-top:4px}.current-label{margin:5px 0 3px}.section-heading{display:none}.draft-panel{gap:5px}
-  .dart-slots button{min-height:57px}.dart-slots b{font-size:20px}.evaluation>div{padding:4px}.evaluation strong{font-size:19px}
-  .draft-actions{grid-template-columns:1fr 1fr 1.25fr}.draft-actions .primary{grid-column:auto;grid-row:auto}.draft-actions button{min-height:44px;font-size:9px}
-  .hint{display:none}.numbers button{min-height:42px}.multipliers button,.special button{min-height:42px}.undo-link{margin-top:5px}
+:root {
+  --accent: #b7f215;
+  --accent2: #d9ff70;
+  --danger: #ff655e;
 }
-.player-fields label>select{min-height:42px;border:1px solid var(--line);border-radius:7px;background:var(--surface2);color:#fff;padding:0 10px}.home-links{display:flex;justify-content:center;gap:20px}.home-links .link-button{margin-inline:0}
+.primary {
+  color: #10150a;
+}
+.segments button.selected,
+.multipliers button.selected {
+  background: #354515;
+}
+.special button:nth-child(2) {
+  background: #8b1717;
+  border-color: #e23636;
+  color: #fff;
+}
+.player-fields {
+  display: grid;
+  gap: 12px;
+}
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+.remove-player {
+  flex: 0 0 52px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface2);
+  font-size: 24px;
+}
+.add-player {
+  width: 100%;
+}
+.starter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 6px;
+}
+.starter-grid button {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  font-weight: 750;
+}
+.starter-grid button.selected {
+  border-color: var(--accent);
+  background: #354515;
+}
+.scoreboard.multi {
+  grid-template-columns: 1fr;
+}
+.scoreboard.multi .player-score {
+  display: grid;
+  grid-template-columns: 70px 1fr auto 150px;
+  align-items: center;
+  gap: 10px;
+}
+.scoreboard.multi .turn-mark,
+.scoreboard.multi .turn-spacer {
+  height: auto;
+}
+.scoreboard.multi .main-score {
+  font-size: 34px;
+  margin: 0;
+}
+.scoreboard.multi .mini-stats {
+  border: 0;
+  padding: 0;
+}
+@media (max-width: 520px) {
+  .scoreboard.multi .player-score {
+    grid-template-columns: 48px 1fr auto;
+  }
+  .scoreboard.multi .mini-stats {
+    display: none;
+  }
+  .scoreboard.multi .main-score {
+    font-size: 28px;
+  }
+}
+@media (max-width: 520px) {
+  .game-header {
+    margin-bottom: 5px;
+  }
+  .game-header .text-icon {
+    height: 36px;
+  }
+  .player-score {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .player-score.active {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  .turn-mark,
+  .turn-spacer {
+    height: 15px;
+  }
+  .main-score {
+    font-size: 44px;
+    margin: 0 0 4px;
+  }
+  .mini-stats {
+    padding-top: 4px;
+  }
+  .current-label {
+    margin: 5px 0 3px;
+  }
+  .section-heading {
+    display: none;
+  }
+  .draft-panel {
+    gap: 5px;
+  }
+  .dart-slots button {
+    min-height: 57px;
+  }
+  .dart-slots b {
+    font-size: 20px;
+  }
+  .evaluation > div {
+    padding: 4px;
+  }
+  .evaluation strong {
+    font-size: 19px;
+  }
+  .draft-actions {
+    grid-template-columns: 1fr 1fr 1.25fr;
+  }
+  .draft-actions .primary {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .draft-actions button {
+    min-height: 44px;
+    font-size: 9px;
+  }
+  .hint {
+    display: none;
+  }
+  .numbers button {
+    min-height: 42px;
+  }
+  .multipliers button,
+  .special button {
+    min-height: 42px;
+  }
+  .undo-link {
+    margin-top: 5px;
+  }
+}
+.player-fields label > select {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface2);
+  color: #fff;
+  padding: 0 10px;
+}
+.home-links {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+.home-links .link-button {
+  margin-inline: 0;
+}
+/* Cascade layer 2/7: concept styling. Keep App.tsx import order stable. */

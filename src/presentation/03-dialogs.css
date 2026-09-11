@@ -26,3 +26,4 @@
 .active-dialog p {
   color: var(--muted);
 }
+/* Cascade layer 3/7: game dialogs. Keep App.tsx import order stable. */
