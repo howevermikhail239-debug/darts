@@ -1,16 +1,13 @@
 import { scoreOf, type DartThrow } from '../darts/DartThrow';
 import { isReachableThreeDartScore } from './aggregateScore';
-import type { Match } from './models';
+import { MAX_PLAYERS, MIN_PLAYERS, type Match } from './models';
 
 /**
  * Единственный валидатор Match в проекте: используется и хранилищем (IndexedDB),
  * и сетевым адаптером. Никаких вторых копий этой логики быть не должно.
  */
 
-// TODO: заменить на MAX_PLAYERS из ./models, как только константа будет там экспортирована.
-export const MAX_PLAYERS = 8;
-
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
+const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 const isInteger = (value: unknown): value is number =>
@@ -126,7 +123,7 @@ function isFixedVisitsPhase(value: unknown, players: readonly string[]): boolean
 export function isStoredMatch(value: unknown): value is Match {
   if (!isRecord(value) || !isText(value.id) || !isText(value.createdAt)
     || !['in_progress', 'completed', 'abandoned'].includes(String(value.status))
-    || !isIdList(value.players) || value.players.length < 2 || value.players.length > MAX_PLAYERS
+    || !isIdList(value.players) || value.players.length < MIN_PLAYERS || value.players.length > MAX_PLAYERS
     || !isUnique(value.players)
     || !isInteger(value.startingPlayerIndex) || value.startingPlayerIndex < 0 || value.startingPlayerIndex >= value.players.length
     || !isInteger(value.currentPlayerIndex) || value.currentPlayerIndex < 0 || value.currentPlayerIndex >= value.players.length

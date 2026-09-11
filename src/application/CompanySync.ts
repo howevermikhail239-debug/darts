@@ -35,10 +35,20 @@ const MAX_RETRY_DELAY_MS = 15 * 60_000;
 const retryDelay = (attempts: number): number =>
   Math.min(BASE_RETRY_DELAY_MS * 2 ** Math.max(0, attempts - 1), MAX_RETRY_DELAY_MS);
 
+/** Сколько записей последнего снимка компании было отброшено как некорректные. */
+export type SnapshotIssues = Readonly<{ skippedMatches: number; skippedPlayers: number }>;
+
 export class CompanySync {
   /** Все мутации компании выстроены в одну очередь: иначе они теряют правки друг друга. */
   private mutations: Promise<unknown> = Promise.resolve();
   private syncing: Promise<void> | undefined;
+  private issues: SnapshotIssues | undefined;
+
+  /** Признак для интерфейса: сервер прислал записи, которые пришлось пропустить. */
+  lastSnapshotIssues(): SnapshotIssues | undefined { return this.issues; }
+  private remember(snapshot: { skippedMatches?: number; skippedPlayers?: number }): void {
+    this.issues = { skippedMatches: snapshot.skippedMatches ?? 0, skippedPlayers: snapshot.skippedPlayers ?? 0 };
+  }
 
   constructor(
     private readonly cache: SharedCache,
@@ -64,6 +74,7 @@ export class CompanySync {
   }
   async open(token: string): Promise<SharedCompany> {
     const result = await this.gateway.loadCompany(token);
+    this.remember(result);
     const company = { token, ...result.company };
     return this.enqueue(async () => {
       await this.cache.saveCompany(company);
@@ -147,6 +158,7 @@ export class CompanySync {
     };
     await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, Math.max(queue.length, 1)) }, worker));
     const result = await this.gateway.loadCompany(token);
+    this.remember(result);
     await this.cache.savePlayers(token, result.players);
     await this.cache.mergeRemote(token, result.matches);
   }

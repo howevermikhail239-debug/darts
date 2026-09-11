@@ -1210,7 +1210,8 @@ test('Stage 4.6 company Last Setup is isolated by company token', async ({ page 
   await page.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' });
   await page.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Саша' });
   await finishOneVisitSeriesFromSetup(page); await page.getByRole('button', { name: 'На главную' }).click();
-  await page.getByRole('button', { name: 'Это устройство' }).click();
+  await page.getByRole('button', { name: 'Выйти из компании' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Выйти из компании' }).click();
   await createCompanyWithPlayers(page, `Клуб B ${Date.now()}`, ['Оля', 'Ира']);
   await page.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Оля' });
   await page.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Ира' });

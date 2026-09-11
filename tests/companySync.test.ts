@@ -207,6 +207,17 @@ describe('CompanySync', () => {
     expect(cache.savedPlayers.map((item) => item.name)).toContain('Новый');
   });
 
+  it('reports how many server records were skipped so the interface can say so', async () => {
+    const cache = new MemoryCache();
+    const gateway = new FakeGateway({ ...snapshot([match('remote')]), skippedMatches: 2, skippedPlayers: 1 });
+    const sync = new CompanySync(cache, gateway);
+    expect(sync.lastSnapshotIssues()).toBeUndefined();
+    await sync.open(company.token);
+    expect(sync.lastSnapshotIssues()).toEqual({ skippedMatches: 2, skippedPlayers: 1 });
+    await sync.sync(company.token);
+    expect(sync.lastSnapshotIssues()).toEqual({ skippedMatches: 2, skippedPlayers: 1 });
+  });
+
   it('propagates a transport failure without corrupting the cache', async () => {
     const cache = new MemoryCache();
     const gateway = new FakeGateway(snapshot([]));

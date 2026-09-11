@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
-import { isSharedMatch, isStoredMatch, MAX_PLAYERS } from "../src/domain/match/validation";
+import { isSharedMatch, isStoredMatch } from "../src/domain/match/validation";
+import { MAX_PLAYERS } from "../src/domain/match/models";
 import { IndexedDbMatchRepository, clearLocalData } from "../src/infrastructure/persistence/IndexedDbRepositories";
 import { createMatch } from "../src/domain/match/createMatch";
 import { emptyDraft } from "../src/domain/match/VisitDraft";
