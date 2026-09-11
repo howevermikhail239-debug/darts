@@ -99,7 +99,7 @@ async function startOneVisitSeriesWithProfiles(page: import("@playwright/test").
   await page.goto('/');
   for (let count = 2; count < names.length; count += 1) await page.getByRole('button', { name: '+ Добавить игрока' }).click();
   for (let index = 0; index < names.length; index += 1) {
-    await page.getByLabel(`Выбрать сохранённого игрока ${index + 1}`).selectOption({ label: names[index] });
+    await page.getByLabel(`Выбрать сохранённого игрока ${index + 1}`).selectOption({ label: names[index]! });
   }
   await page.getByRole('button', { name: 'Серия' }).click();
   await page.getByRole('button', { name: 'Другое' }).click();
@@ -759,7 +759,7 @@ async function createCompanyWithPlayers(page: import('@playwright/test').Page, n
   await page.getByLabel('Название компании (необязательно)').fill(name); await page.getByRole('button', { name: 'Создать', exact: true }).click();
   for (const player of players) { const field = page.getByLabel('Добавить игрока компании'); await field.fill(player); await page.getByRole('button', { name: 'Добавить игрока', exact: true }).click(); await expect(field).toHaveValue(''); }
 }
-async function oneVisitSeries(page: import('@playwright/test').Page, firstScore: 0, secondScore = 0) {
+async function oneVisitSeries(page: import('@playwright/test').Page, firstScore: number = 0, secondScore = 0) {
   await page.getByRole('button', { name: 'Серия' }).click(); await page.getByRole('button', { name: 'Другое' }).click(); await page.getByLabel('Другое количество подходов').fill('1'); await page.getByRole('button', { name: 'Начать' }).click();
   for (const score of [firstScore, secondScore]) { if (score) await page.getByRole('button', { name: 'Сектор 20, множитель 1' }).click(); for (let dart = score ? 1 : 0; dart < 3; dart += 1) await page.getByRole('button', { name: 'Мимо' }).click(); await page.getByRole('button', { name: `Подтвердить ${score}` }).click(); }
 }
@@ -1038,7 +1038,7 @@ test('Stage 4.5 temporary rematch recreates only temporary identity and never cr
 test('Stage 4.5 company rematch preserves three shared ids and History can start another rematch', async ({ page }) => {
   await createCompanyWithPlayers(page, 'Серия клуба', ['Миша', 'Саша', 'Женя']);
   await page.getByRole('button', { name: '+ Добавить игрока' }).click();
-  for (let index = 1; index <= 3; index += 1) await page.getByLabel(`Выбрать сохранённого игрока ${index}`).selectOption({ label: ['Миша', 'Саша', 'Женя'][index - 1] });
+  for (let index = 1; index <= 3; index += 1) await page.getByLabel(`Выбрать сохранённого игрока ${index}`).selectOption({ label: ['Миша', 'Саша', 'Женя'][index - 1]! });
   await page.getByRole('button', { name: 'Серия' }).click(); await page.getByRole('button', { name: 'Другое' }).click(); await page.getByLabel('Другое количество подходов').fill('1'); await page.getByRole('button', { name: 'Начать' }).click();
   await expect(page.getByText('Текущий подход:')).toBeVisible();
   const first = await activeMatchIdentity(page); await scoringVisit(page, 20); await missVisit(page); await missVisit(page);
