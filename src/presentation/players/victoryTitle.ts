@@ -11,9 +11,9 @@
 const FEMININE_ENDING = /(на|ла|ра|та|га)$/iu;
 
 export function victoryVerb(name: string): string {
-  return `победил${FEMININE_ENDING.test(name) ? "а" : ""}`;
+  return `победил${FEMININE_ENDING.test(name) ? 'а' : ''}`;
 }
 
-export function victoryTitle(name: string | undefined, draw: string = "Ничья"): string {
+export function victoryTitle(name: string | undefined, draw: string = 'Ничья'): string {
   return name ? `${name} ${victoryVerb(name)}` : draw;
 }

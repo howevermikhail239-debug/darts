@@ -11,8 +11,9 @@ export const playerIndex = (match: Match, playerId: PlayerId): number => {
 /** Keeps the seating order of the match but starts the sequence at the starting player. */
 export const orderedFromStarter = (match: Match, playerIds: readonly PlayerId[]): readonly PlayerId[] => {
   const eligible = new Set(playerIds);
-  return Array.from({ length: match.players.length }, (_, offset) =>
-    match.players[(match.startingPlayerIndex + offset) % match.players.length],
+  return Array.from(
+    { length: match.players.length },
+    (_, offset) => match.players[(match.startingPlayerIndex + offset) % match.players.length],
   ).filter((id): id is PlayerId => id !== undefined && eligible.has(id));
 };
 

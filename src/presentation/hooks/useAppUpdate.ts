@@ -1,5 +1,5 @@
-import { useCallback, useSyncExternalStore } from "react";
-import { clearAppUpdate, pendingAppUpdate, subscribeToAppUpdate } from "../pwa/appUpdate";
+import { useCallback, useSyncExternalStore } from 'react';
+import { clearAppUpdate, pendingAppUpdate, subscribeToAppUpdate } from '../pwa/appUpdate';
 
 /**
  * Возвращает `apply`, если готова новая версия приложения (REL-3).

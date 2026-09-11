@@ -19,11 +19,16 @@ async function loadUpdateBridge() {
     addEventListener(type, handler) {
       listeners.set(type, [...(listeners.get(type) ?? []), handler]);
     },
-    skipWaiting() { worker.skipWaitingCalls += 1; },
+    skipWaiting() {
+      worker.skipWaitingCalls += 1;
+    },
   };
   const openWindow = {
     url: 'https://darts.example/g/token',
-    navigate(url) { navigations.push(url); return Promise.resolve(openWindow); },
+    navigate(url) {
+      navigations.push(url);
+      return Promise.resolve(openWindow);
+    },
   };
   const clients = {
     matchAll: () => Promise.resolve([openWindow]),

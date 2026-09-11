@@ -27,17 +27,17 @@ The VM public IPv4 is dynamic and exists only for key-based administration. User
 
 ## Resources
 
-| Resource | Name | ID / value |
-| --- | --- | --- |
-| Network | `darts-net` | `enpkmg4e9kknic65opb1` |
-| Subnet | `darts-subnet` | `e9btaujpdupqfkqohf2o`, `10.77.0.0/24` |
-| Security group | `darts-sg` | `enpgduhipvqqtt1kee4e` |
-| VM | `darts-vm` | `fhmsa6ctmrsr66481j0b`, private IP `10.77.0.10` |
-| Boot disk | `darts-boot` | `fhmpegu1b4rb2lsccd4v`, 10 GB `network-hdd`, auto-delete enabled |
-| Data disk | `darts-data` | `fhm6tvolb6sscftsogp6`, 4 GB `network-hdd`, auto-delete disabled |
-| API Gateway | `darts-gateway` | `d5dea34ovm6biisul5p6` |
-| Initial snapshot | `darts-data-initial-20260911` | `fd89jkqoqd2jplnjkkco` |
-| Budget | `darts-monthly-3000` | `dn2drnrmvo94d4tek7t4` |
+| Resource         | Name                          | ID / value                                                       |
+| ---------------- | ----------------------------- | ---------------------------------------------------------------- |
+| Network          | `darts-net`                   | `enpkmg4e9kknic65opb1`                                           |
+| Subnet           | `darts-subnet`                | `e9btaujpdupqfkqohf2o`, `10.77.0.0/24`                           |
+| Security group   | `darts-sg`                    | `enpgduhipvqqtt1kee4e`                                           |
+| VM               | `darts-vm`                    | `fhmsa6ctmrsr66481j0b`, private IP `10.77.0.10`                  |
+| Boot disk        | `darts-boot`                  | `fhmpegu1b4rb2lsccd4v`, 10 GB `network-hdd`, auto-delete enabled |
+| Data disk        | `darts-data`                  | `fhm6tvolb6sscftsogp6`, 4 GB `network-hdd`, auto-delete disabled |
+| API Gateway      | `darts-gateway`               | `d5dea34ovm6biisul5p6`                                           |
+| Initial snapshot | `darts-data-initial-20260911` | `fd89jkqoqd2jplnjkkco`                                           |
+| Budget           | `darts-monthly-3000`          | `dn2drnrmvo94d4tek7t4`                                           |
 
 The VM uses `standard-v2`, 2 vCPU at 5% baseline and 1 GB RAM. This is the cheapest tested non-preemptible configuration that preserves automatic recovery. The boot disk is the Ubuntu 24.04 LTS minimum; the separate 4 GB disk is ample for the current JSON and bounded backups.
 
@@ -45,14 +45,14 @@ The VM uses `standard-v2`, 2 vCPU at 5% baseline and 1 GB RAM. This is the cheap
 
 The estimate uses current RUB SKU rates returned by the Yandex Billing API on 2026-09-11:
 
-| Item | Rate | Estimated hourly cost |
-| --- | ---: | ---: |
-| 2 × Intel Cascade Lake 5% vCPU | 0.1897 ₽ / core-hour | 0.3794 ₽ |
-| 1 GB RAM | 0.3676 ₽ / GB-hour | 0.3676 ₽ |
-| 14 GB network HDD | 0.0048 ₽ / GB-hour | 0.0672 ₽ |
-| Active dynamic public IP | 0.26352 ₽ / hour | 0.26352 ₽ |
-| Initial snapshot (about 56 MiB stored) | 0.0051 ₽ / GB-hour | about 0.00029 ₽ |
-| API Gateway | first 100,000 requests/month free; then 142.3 ₽ / million | 0 ₽ at test load |
+| Item                                   |                                                      Rate | Estimated hourly cost |
+| -------------------------------------- | --------------------------------------------------------: | --------------------: |
+| 2 × Intel Cascade Lake 5% vCPU         |                                      0.1897 ₽ / core-hour |              0.3794 ₽ |
+| 1 GB RAM                               |                                        0.3676 ₽ / GB-hour |              0.3676 ₽ |
+| 14 GB network HDD                      |                                        0.0048 ₽ / GB-hour |              0.0672 ₽ |
+| Active dynamic public IP               |                                          0.26352 ₽ / hour |             0.26352 ₽ |
+| Initial snapshot (about 56 MiB stored) |                                        0.0051 ₽ / GB-hour |       about 0.00029 ₽ |
+| API Gateway                            | first 100,000 requests/month free; then 142.3 ₽ / million |      0 ₽ at test load |
 
 Expected total at low traffic: about `1.078 ₽/hour`, `25.87 ₽/day`, `776.16 ₽/30 days`, or `1,552.33 ₽/60 days`, excluding unusual outbound traffic or traffic above free allowances. This is within the approximately 4,000 ₽ grant. The active monthly expense budget sends notifications at 1,000 ₽, 2,000 ₽, and the 3,000 ₽ limit. A budget warns but does not stop resources.
 

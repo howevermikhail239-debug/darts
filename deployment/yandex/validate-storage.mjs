@@ -6,8 +6,8 @@ if (storage?.version !== 1 || !storage.groups || typeof storage.groups !== 'obje
   throw new Error('Invalid Dart Scorekeeper storage envelope');
 }
 
-const isRecord = value => typeof value === 'object' && value !== null && !Array.isArray(value);
-const isText = value => typeof value === 'string' && value.trim().length > 0;
+const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isText = (value) => typeof value === 'string' && value.trim().length > 0;
 
 /** Matches are stored as { match, revision, updatedAt }; files written before that carry the bare match. */
 const checkMatch = (entry, matchId) => {
@@ -45,10 +45,12 @@ for (const [storedTokenHash, group] of Object.entries(storage.groups)) {
   matches += Object.keys(group.matches).length;
 }
 
-console.log(JSON.stringify({
-  valid: true,
-  companies: Object.keys(storage.groups).length,
-  players,
-  matches,
-  versionedMatches,
-}));
+console.log(
+  JSON.stringify({
+    valid: true,
+    companies: Object.keys(storage.groups).length,
+    players,
+    matches,
+    versionedMatches,
+  }),
+);

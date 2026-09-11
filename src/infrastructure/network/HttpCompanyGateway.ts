@@ -1,6 +1,11 @@
 import type { Match, Player } from '../../domain/match/models';
 import { isSharedMatch, isSharedPlayer, migrateMatch } from '../../domain/match/validation';
-import { HttpError, type CompanyGateway, type CompanySnapshot, type SharedCompany } from '../../application/ports/companyGateway';
+import {
+  HttpError,
+  type CompanyGateway,
+  type CompanySnapshot,
+  type SharedCompany,
+} from '../../application/ports/companyGateway';
 
 /** Зеркало серверного ограничения на размер тела запроса (server.mjs). */
 export const MAX_UPLOAD_BYTES = 512 * 1024;
@@ -9,7 +14,9 @@ export const IDEMPOTENT_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 300;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
-const invalidResponse = (): never => { throw new Error('Сервер компании вернул некорректные данные.'); };
+const invalidResponse = (): never => {
+  throw new Error('Сервер компании вернул некорректные данные.');
+};
 
 const statusMessage = (status: number): string => {
   if (status === 404) return 'Компания не найдена или ссылка недействительна.';
@@ -77,16 +84,27 @@ async function request(path: string, options?: RequestInit): Promise<unknown> {
 }
 
 const companyFields = (value: unknown): Omit<SharedCompany, 'token'> => {
-  if (!isRecord(value) || typeof value.name !== 'string' || typeof value.createdAt !== 'string') return invalidResponse();
+  if (!isRecord(value) || typeof value.name !== 'string' || typeof value.createdAt !== 'string')
+    return invalidResponse();
   return { name: value.name, createdAt: value.createdAt };
 };
 const player = (value: unknown): Player => {
   if (!isSharedPlayer(value)) return invalidResponse();
-  return { id: value.id, name: value.name, createdAt: value.createdAt, ...(typeof value.statsResetAt === 'string' ? { statsResetAt: value.statsResetAt } : {}) };
+  return {
+    id: value.id,
+    name: value.name,
+    createdAt: value.createdAt,
+    ...(typeof value.statsResetAt === 'string' ? { statsResetAt: value.statsResetAt } : {}),
+  };
 };
 const sharedPlayer = (value: unknown): Player | undefined => {
   if (!isSharedPlayer(value)) return undefined;
-  return { id: value.id, name: value.name, createdAt: value.createdAt, ...(typeof value.statsResetAt === 'string' ? { statsResetAt: value.statsResetAt } : {}) };
+  return {
+    id: value.id,
+    name: value.name,
+    createdAt: value.createdAt,
+    ...(typeof value.statsResetAt === 'string' ? { statsResetAt: value.statsResetAt } : {}),
+  };
 };
 
 export class HttpCompanyGateway implements CompanyGateway {
@@ -113,19 +131,30 @@ export class HttpCompanyGateway implements CompanyGateway {
     };
   }
   async createPlayer(token: string, name: string): Promise<Player> {
-    const result = await request(`/api/groups/${encodeURIComponent(token)}/players`, { method: 'POST', body: JSON.stringify({ name }) });
+    const result = await request(`/api/groups/${encodeURIComponent(token)}/players`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
     return isRecord(result) ? player(result.player) : invalidResponse();
   }
   async renamePlayer(token: string, playerId: string, name: string): Promise<Player> {
-    const result = await request(`/api/groups/${encodeURIComponent(token)}/players/${encodeURIComponent(playerId)}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+    const result = await request(`/api/groups/${encodeURIComponent(token)}/players/${encodeURIComponent(playerId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
     return isRecord(result) ? player(result.player) : invalidResponse();
   }
   async resetPlayerStatistics(token: string, playerId: string): Promise<Player> {
-    const result = await request(`/api/groups/${encodeURIComponent(token)}/players/${encodeURIComponent(playerId)}/statistics-reset`, { method: 'POST' });
+    const result = await request(
+      `/api/groups/${encodeURIComponent(token)}/players/${encodeURIComponent(playerId)}/statistics-reset`,
+      { method: 'POST' },
+    );
     return isRecord(result) ? player(result.player) : invalidResponse();
   }
   async deletePlayer(token: string, playerId: string): Promise<void> {
-    await request(`/api/groups/${encodeURIComponent(token)}/players/${encodeURIComponent(playerId)}`, { method: 'DELETE' });
+    await request(`/api/groups/${encodeURIComponent(token)}/players/${encodeURIComponent(playerId)}`, {
+      method: 'DELETE',
+    });
   }
   async uploadMatch(token: string, match: Match): Promise<void> {
     const body = JSON.stringify(match);
@@ -136,9 +165,14 @@ export class HttpCompanyGateway implements CompanyGateway {
         `Матч слишком большой для отправки в компанию (${Math.round(bytes / 1024)} КБ при пределе ${Math.round(MAX_UPLOAD_BYTES / 1024)} КБ).`,
         413,
       );
-    await request(`/api/groups/${encodeURIComponent(token)}/matches/${encodeURIComponent(match.id)}`, { method: 'PUT', body });
+    await request(`/api/groups/${encodeURIComponent(token)}/matches/${encodeURIComponent(match.id)}`, {
+      method: 'PUT',
+      body,
+    });
   }
   async deleteMatch(token: string, matchId: string): Promise<void> {
-    await request(`/api/groups/${encodeURIComponent(token)}/matches/${encodeURIComponent(matchId)}`, { method: 'DELETE' });
+    await request(`/api/groups/${encodeURIComponent(token)}/matches/${encodeURIComponent(matchId)}`, {
+      method: 'DELETE',
+    });
   }
 }

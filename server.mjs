@@ -43,9 +43,7 @@ const RATE = {
 };
 
 const STORAGE_PROBE_MS = number('DARTS_STORAGE_PROBE_MS', 30_000);
-const LOG_LEVEL = ['silent', 'error', 'info'].includes(process.env.LOG_LEVEL || '')
-  ? process.env.LOG_LEVEL
-  : 'info';
+const LOG_LEVEL = ['silent', 'error', 'info'].includes(process.env.LOG_LEVEL || '') ? process.env.LOG_LEVEL : 'info';
 
 const SECURITY_HEADERS = {
   'x-content-type-options': 'nosniff',
@@ -109,7 +107,7 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 // ---------------------------------------------------------------------------
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
-const tokenHash = token => createHash('sha256').update(token).digest('hex');
+const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
 
 class RequestError extends Error {
   constructor(code, status) {
@@ -126,19 +124,19 @@ const EXPECTED_ERRORS = {
 };
 
 /** Canonical serialization: keys sorted at every level, so key order never means "changed". */
-const canonical = value => {
+const canonical = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object') {
     const keys = Object.keys(value).sort();
     const fields = keys
-      .filter(key => value[key] !== undefined)
-      .map(key => `${JSON.stringify(key)}:${canonical(value[key])}`);
+      .filter((key) => value[key] !== undefined)
+      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`);
     return `{${fields.join(',')}}`;
   }
   return JSON.stringify(value === undefined ? null : value);
 };
 
-const logEvent = entry => {
+const logEvent = (entry) => {
   if (LOG_LEVEL !== 'info') return;
   console.error(JSON.stringify(entry));
 };
@@ -149,7 +147,7 @@ const logError = (event, error) => {
 };
 
 /** The company token never reaches the log: only the first 8 characters of its hash do. */
-const normalizePath = pathname => {
+const normalizePath = (pathname) => {
   const parts = pathname.split('/');
   if (parts[1] === 'api' && parts[2] === 'groups' && parts[3]) {
     parts[3] = `t_${tokenHash(parts[3]).slice(0, 8)}`;
@@ -179,7 +177,7 @@ let storageError = false;
 let storageFatal = false;
 
 /** Matches are stored as { match, revision, updatedAt }; older files hold the bare match. */
-const normalizeStored = parsed => {
+const normalizeStored = (parsed) => {
   if (!parsed || typeof parsed !== 'object' || parsed.version !== 1) {
     throw new Error('Invalid Dart Scorekeeper storage envelope');
   }
@@ -231,7 +229,7 @@ if (!storageError) {
   }
 }
 
-const persist = async next => {
+const persist = async (next) => {
   await mkdir(dirname(dataFile), { recursive: true });
   const temporary = `${dataFile}.${process.pid}.tmp`;
   await writeFile(temporary, JSON.stringify(next), 'utf8');
@@ -324,7 +322,7 @@ const readJson = async (req, res, context) => {
   }
 };
 
-const clientIp = req => {
+const clientIp = (req) => {
   const forwarded = req.headers['x-forwarded-for'];
   const list = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const first = typeof list === 'string' ? list.split(',')[0].trim() : '';
@@ -356,7 +354,7 @@ const tooManyRequests = (res, retryAfter) => {
   send(res, 429, { error: 'rate_limited', retryAfter });
 };
 
-const hasJsonContentType = req => {
+const hasJsonContentType = (req) => {
   const value = req.headers['content-type'];
   if (typeof value !== 'string') return false;
   return value.split(';')[0].trim().toLowerCase() === 'application/json';
@@ -366,17 +364,15 @@ const hasJsonContentType = req => {
 // Validation
 // ---------------------------------------------------------------------------
 
-const record = value => typeof value === 'object' && value !== null && !Array.isArray(value);
-const validName = value =>
-  typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80;
-const validId = value =>
-  typeof value === 'string' && value.trim().length > 0 && value.length <= 160;
+const record = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const validName = (value) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80;
+const validId = (value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 160;
 
 /**
  * Structural validation of a shared match. Game rules stay on the client by design,
  * but a payload that contradicts itself is refused here (SEC-4).
  */
-const validMatch = value => {
+const validMatch = (value) => {
   if (!record(value)) return 'invalid_match';
   if (!validId(value.id)) return 'invalid_match';
   if (!['completed', 'abandoned'].includes(value.status)) return 'invalid_match';
@@ -392,9 +388,7 @@ const validMatch = value => {
   if (new Set(players).size !== players.length) return 'invalid_match';
   if (!record(value.participantNames)) return 'invalid_match';
   const names = value.participantNames;
-  const named = players.every(
-    id => own(names, id) && typeof names[id] === 'string' && names[id].trim().length > 0,
-  );
+  const named = players.every((id) => own(names, id) && typeof names[id] === 'string' && names[id].trim().length > 0);
   if (!named) return 'invalid_match';
   if (value.winnerId !== undefined && !players.includes(value.winnerId)) return 'invalid_match';
   if (!record(value.state) || !['x01', 'fixed_visits'].includes(value.state.kind)) {
@@ -406,10 +400,14 @@ const validMatch = value => {
   return null;
 };
 
-const parseIfMatch = req => {
+const parseIfMatch = (req) => {
   const header = req.headers['if-match'];
   if (typeof header !== 'string') return undefined;
-  const value = header.trim().replace(/^W\//i, '').replace(/^"(.*)"$/, '$1').trim();
+  const value = header
+    .trim()
+    .replace(/^W\//i, '')
+    .replace(/^"(.*)"$/, '$1')
+    .trim();
   return value.length > 0 ? value : undefined;
 };
 
@@ -417,12 +415,12 @@ const parseIfMatch = req => {
 // API handlers
 // ---------------------------------------------------------------------------
 
-const groupOf = token => {
+const groupOf = (token) => {
   const hash = tokenHash(token);
   return own(data.groups, hash) ? data.groups[hash] : undefined;
 };
 
-const matchesOf = group => Object.values(group.matches).map(entry => entry.match);
+const matchesOf = (group) => Object.values(group.matches).map((entry) => entry.match);
 
 const createGroup = async (req, res, context) => {
   const body = await readJson(req, res, context);
@@ -434,7 +432,7 @@ const createGroup = async (req, res, context) => {
   const token = randomBytes(32).toString('base64url');
   const name = body.name?.trim() || '';
   const createdAt = new Date().toISOString();
-  const outcome = await transact(null, next => {
+  const outcome = await transact(null, (next) => {
     if (Object.keys(next.groups).length >= QUOTA.groups) {
       return { commit: false, value: 'too_many_groups' };
     }
@@ -449,7 +447,7 @@ const createPlayer = async (req, res, context, token) => {
   const body = await readJson(req, res, context);
   if (!validName(body.name)) return send(res, 400, { error: 'invalid_player' });
   const player = { id: randomUUID(), name: body.name.trim(), createdAt: new Date().toISOString() };
-  const outcome = await transact(tokenHash(token), next => {
+  const outcome = await transact(tokenHash(token), (next) => {
     const target = next.groups[tokenHash(token)];
     if (Object.keys(target.players).length >= QUOTA.playersPerGroup) {
       return { commit: false, value: 'too_many_players' };
@@ -463,7 +461,7 @@ const createPlayer = async (req, res, context, token) => {
 
 const updatePlayer = async (res, token, playerId, change) => {
   if (!UUID_V4.test(playerId)) return send(res, 404, { error: 'not_found' });
-  const updated = await transact(tokenHash(token), next => {
+  const updated = await transact(tokenHash(token), (next) => {
     const target = next.groups[tokenHash(token)];
     if (!own(target.players, playerId)) return { commit: false, value: undefined };
     const player = { ...target.players[playerId], ...change() };
@@ -475,7 +473,7 @@ const updatePlayer = async (res, token, playerId, change) => {
 
 const deletePlayer = async (res, token, playerId) => {
   if (!UUID_V4.test(playerId)) return send(res, 404, { error: 'not_found' });
-  await transact(tokenHash(token), next => {
+  await transact(tokenHash(token), (next) => {
     const target = next.groups[tokenHash(token)];
     if (!own(target.players, playerId)) return { commit: false };
     delete target.players[playerId];
@@ -495,7 +493,7 @@ const putMatch = async (req, res, context, token, matchId) => {
   const updatedAt = new Date().toISOString();
   const expected = parseIfMatch(req);
   const payload = canonical(body);
-  const outcome = await transact(tokenHash(token), next => {
+  const outcome = await transact(tokenHash(token), (next) => {
     const target = next.groups[tokenHash(token)];
     const current = own(target.matches, matchId) ? target.matches[matchId] : undefined;
     if (!current) {
@@ -532,7 +530,7 @@ const putMatch = async (req, res, context, token, matchId) => {
 
 const deleteMatch = async (res, token, matchId) => {
   if (RESERVED_KEYS.has(matchId)) return send(res, 404, { error: 'not_found' });
-  await transact(tokenHash(token), next => {
+  await transact(tokenHash(token), (next) => {
     const target = next.groups[tokenHash(token)];
     if (!own(target.matches, matchId)) return { commit: false };
     delete target.matches[matchId];
@@ -594,11 +592,11 @@ try {
   /* A missing dist directory keeps the API usable and yields 404 for static paths. */
 }
 
-const mime = path => MIME_TYPES[extname(path).toLowerCase()] || 'application/octet-stream';
+const mime = (path) => MIME_TYPES[extname(path).toLowerCase()] || 'application/octet-stream';
 
-const insideDist = path => path === distReal || path.startsWith(`${distReal}${sep}`);
+const insideDist = (path) => path === distReal || path.startsWith(`${distReal}${sep}`);
 
-const sendIndex = async res => {
+const sendIndex = async (res) => {
   const html = await readFile(join(dist, 'index.html'));
   res.writeHead(200, {
     ...SECURITY_HEADERS,
@@ -630,9 +628,7 @@ const serveStatic = async (res, pathname) => {
     if (extname(path)) return send(res, 404, { error: 'not_found' });
     return sendIndex(res);
   }
-  const cacheControl = target.includes(`${sep}assets${sep}`)
-    ? 'public, max-age=31536000, immutable'
-    : 'no-cache';
+  const cacheControl = target.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache';
   res.writeHead(200, {
     ...SECURITY_HEADERS,
     'content-type': mime(target),
@@ -714,7 +710,7 @@ const server = createServer((req, res) => {
       completed: res.writableFinished,
     });
   });
-  route(req, res, context).catch(error => failed(res, error));
+  route(req, res, context).catch((error) => failed(res, error));
 });
 
 server.headersTimeout = 10_000;
@@ -722,16 +718,19 @@ server.requestTimeout = 20_000;
 server.maxConnections = 512;
 server.on('clientError', (error, socket) => socket.destroy());
 
-process.on('unhandledRejection', reason => logError('unhandled_rejection', reason));
-process.on('uncaughtException', error => logError('uncaught_exception', error));
+process.on('unhandledRejection', (reason) => logError('unhandled_rejection', reason));
+process.on('uncaughtException', (error) => logError('uncaught_exception', error));
 
 let shuttingDown = false;
-const shutdown = signal => {
+const shutdown = (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
   logEvent({ event: 'shutdown', signal, at: new Date().toISOString() });
   server.close(() => {
-    writing.then(() => process.exit(0), () => process.exit(0));
+    writing.then(
+      () => process.exit(0),
+      () => process.exit(0),
+    );
   });
   server.closeIdleConnections?.();
   setTimeout(() => process.exit(1), 10_000).unref();

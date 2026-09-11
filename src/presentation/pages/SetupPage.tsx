@@ -1,13 +1,17 @@
-import { useState, type FormEvent } from "react";
-import type { MatchSetup } from "../../domain/match/createMatch";
-import type { MatchParticipantInput } from "../../application/StartMatch";
-import { restoreLastSetupParticipants, type LastSetupTemplate, type RestoredSetupParticipant } from "../../application/LastSetup";
-import type { Player } from "../../domain/match/models";
-import type { TodaySummary } from "../../domain/statistics/todaySummary";
-import { PlayerIdentity } from "../components/PlayerIdentity";
-import { Dialog } from "../components/Dialog";
-import { userMessage } from "../errors/userMessage";
-import { t } from "../strings";
+import { useState, type FormEvent } from 'react';
+import type { MatchSetup } from '../../domain/match/createMatch';
+import type { MatchParticipantInput } from '../../application/StartMatch';
+import {
+  restoreLastSetupParticipants,
+  type LastSetupTemplate,
+  type RestoredSetupParticipant,
+} from '../../application/LastSetup';
+import type { Player } from '../../domain/match/models';
+import type { TodaySummary } from '../../domain/statistics/todaySummary';
+import { PlayerIdentity } from '../components/PlayerIdentity';
+import { Dialog } from '../components/Dialog';
+import { userMessage } from '../errors/userMessage';
+import { t } from '../strings';
 
 export type SetupParticipant = MatchParticipantInput;
 type ParticipantDraft = RestoredSetupParticipant;
@@ -30,26 +34,56 @@ type Props = {
 
 const defaultParticipant = (index: number): ParticipantDraft => ({ name: `Игрок ${index + 1}` });
 
-export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalPlayer, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, inviteLink, onRetry, syncNote, initialSetup, today }: Props) {
+export function SetupPage({
+  saved,
+  onStart,
+  onHistory,
+  onStatistics,
+  onAddLocalPlayer,
+  company,
+  onCreateCompany,
+  onAddSharedPlayer,
+  onLeaveCompany,
+  inviteLink,
+  onRetry,
+  syncNote,
+  initialSetup,
+  today,
+}: Props) {
   const restoredParticipants = restoreLastSetupParticipants(initialSetup, saved);
   const restored = initialSetup?.setup;
-  const restoredVisits = restored?.mode === "fixed_visits" ? restored.visitsPerPlayer : restored?.format.kind === "limited" ? restored.format.visitsPerPlayer : 20;
-  const [participants, setParticipants] = useState<ParticipantDraft[]>(() => [...(restoredParticipants ?? [defaultParticipant(0), defaultParticipant(1)])]);
-  const [mode, setMode] = useState<"x01" | "fixed_visits">(restored?.mode ?? "x01");
-  const [x01Format, setX01Format] = useState<"unlimited" | "limited">(restored?.mode === "x01" ? restored.format.kind : "unlimited");
-  const [startingScore, setStartingScore] = useState<301 | 501 | 701>(restored?.mode === "x01" ? restored.startingScore ?? 501 : 501);
-  const [outRule, setOutRule] = useState<"straight" | "double">(restored?.mode === "x01" ? restored.outRule ?? "straight" : "straight");
+  const restoredVisits =
+    restored?.mode === 'fixed_visits'
+      ? restored.visitsPerPlayer
+      : restored?.format.kind === 'limited'
+        ? restored.format.visitsPerPlayer
+        : 20;
+  const [participants, setParticipants] = useState<ParticipantDraft[]>(() => [
+    ...(restoredParticipants ?? [defaultParticipant(0), defaultParticipant(1)]),
+  ]);
+  const [mode, setMode] = useState<'x01' | 'fixed_visits'>(restored?.mode ?? 'x01');
+  const [x01Format, setX01Format] = useState<'unlimited' | 'limited'>(
+    restored?.mode === 'x01' ? restored.format.kind : 'unlimited',
+  );
+  const [startingScore, setStartingScore] = useState<301 | 501 | 701>(
+    restored?.mode === 'x01' ? (restored.startingScore ?? 501) : 501,
+  );
+  const [outRule, setOutRule] = useState<'straight' | 'double'>(
+    restored?.mode === 'x01' ? (restored.outRule ?? 'straight') : 'straight',
+  );
   const [visits, setVisits] = useState(restoredVisits);
   const [custom, setCustom] = useState(![5, 10, 20, 30].includes(restoredVisits));
-  const [starter, setStarter] = useState<number | "random">(restored?.startingPlayerIndex ?? 0);
+  const [starter, setStarter] = useState<number | 'random'>(restored?.startingPlayerIndex ?? 0);
   const [busy, setBusy] = useState(false);
   const [startError, setStartError] = useState<string>();
   const createProfile = company ? onAddSharedPlayer : onAddLocalPlayer;
 
-  const selectedIds = participants.flatMap((participant) => participant.playerId ? [participant.playerId] : []);
-  const participantsValid = participants.every((participant) => participant.name.trim() && !participant.missingPlayerId) && new Set(selectedIds).size === selectedIds.length;
+  const selectedIds = participants.flatMap((participant) => (participant.playerId ? [participant.playerId] : []));
+  const participantsValid =
+    participants.every((participant) => participant.name.trim() && !participant.missingPlayerId) &&
+    new Set(selectedIds).size === selectedIds.length;
   const visitsValid = Number.isInteger(visits) && visits >= 1 && visits <= 999;
-  const visitsRequired = mode === "fixed_visits" || x01Format === "limited";
+  const visitsRequired = mode === 'fixed_visits' || x01Format === 'limited';
   const valid = participantsValid && (!visitsRequired || visitsValid);
 
   const start = async () => {
@@ -57,14 +91,27 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
     setBusy(true);
     setStartError(undefined);
     try {
-      const startingPlayerIndex = starter === "random" ? Math.floor(Math.random() * participants.length) : Math.min(starter, participants.length - 1);
-      const clean = participants.map(({ name, playerId }) => ({ name: name.trim(), ...(playerId ? { playerId } : {}) }));
-      const setup: MatchSetup = mode === "x01"
-        ? { mode, startingScore, outRule, format: x01Format === "unlimited" ? { kind: "unlimited" } : { kind: "limited", visitsPerPlayer: visits }, startingPlayerIndex }
-        : { mode, visitsPerPlayer: visits, startingPlayerIndex };
+      const startingPlayerIndex =
+        starter === 'random'
+          ? Math.floor(Math.random() * participants.length)
+          : Math.min(starter, participants.length - 1);
+      const clean = participants.map(({ name, playerId }) => ({
+        name: name.trim(),
+        ...(playerId ? { playerId } : {}),
+      }));
+      const setup: MatchSetup =
+        mode === 'x01'
+          ? {
+              mode,
+              startingScore,
+              outRule,
+              format: x01Format === 'unlimited' ? { kind: 'unlimited' } : { kind: 'limited', visitsPerPlayer: visits },
+              startingPlayerIndex,
+            }
+          : { mode, visitsPerPlayer: visits, startingPlayerIndex };
       await onStart(clean, setup);
     } catch (cause) {
-      setStartError(userMessage(cause, "Не удалось начать матч. Попробуйте ещё раз."));
+      setStartError(userMessage(cause, 'Не удалось начать матч. Попробуйте ещё раз.'));
     } finally {
       setBusy(false);
     }
@@ -72,52 +119,151 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
 
   return (
     <main className="setup-page">
-      <header className="brand"><div className="brand-mark" aria-hidden="true">◎</div><div><h1>{t.newGame}</h1><p>Настройте матч — и к мишени.</p></div></header>
-      <CompanyContextPanel company={company} syncNote={syncNote} onCreateCompany={onCreateCompany} onAddSharedPlayer={onAddSharedPlayer} onLeaveCompany={onLeaveCompany} inviteLink={inviteLink} onRetry={onRetry} />
+      <header className="brand">
+        <div className="brand-mark" aria-hidden="true">
+          ◎
+        </div>
+        <div>
+          <h1>{t.newGame}</h1>
+          <p>Настройте матч — и к мишени.</p>
+        </div>
+      </header>
+      <CompanyContextPanel
+        company={company}
+        syncNote={syncNote}
+        onCreateCompany={onCreateCompany}
+        onAddSharedPlayer={onAddSharedPlayer}
+        onLeaveCompany={onLeaveCompany}
+        inviteLink={inviteLink}
+        onRetry={onRetry}
+      />
       {today ? <TodayPanel summary={today} /> : null}
       <section className="setup-form" aria-label="Настройка матча">
-        <div className="setup-section-title"><span>1</span><div><h2>Участники</h2><p>Профиль хранит статистику между матчами. Временный игрок — только для этой игры.</p></div></div>
+        <div className="setup-section-title">
+          <span>1</span>
+          <div>
+            <h2>Участники</h2>
+            <p>Профиль хранит статистику между матчами. Временный игрок — только для этой игры.</p>
+          </div>
+        </div>
         <ParticipantList
           participants={participants}
           saved={saved}
-          profileLabel={company ? "Профиль компании" : "Профиль игрока"}
+          profileLabel={company ? 'Профиль компании' : 'Профиль игрока'}
           onCreateProfile={createProfile}
           onChange={setParticipants}
-          onRemove={(index) => { setParticipants((current) => current.filter((_, itemIndex) => itemIndex !== index)); setStarter(0); }}
+          onRemove={(index) => {
+            setParticipants((current) => current.filter((_, itemIndex) => itemIndex !== index));
+            setStarter(0);
+          }}
           onAdd={() => setParticipants((current) => [...current, defaultParticipant(current.length)])}
         />
-        {!participantsValid ? <p className="reason">Заполните имена, замените недоступные профили и не выбирайте один профиль дважды.</p> : null}
+        {!participantsValid ? (
+          <p className="reason">Заполните имена, замените недоступные профили и не выбирайте один профиль дважды.</p>
+        ) : null}
         {visitsRequired && !visitsValid ? <p className="reason">Количество подходов должно быть от 1 до 999.</p> : null}
-        <div className="setup-section-title"><span>2</span><div><h2>Правила матча</h2><p>Главные параметры — без лишних шагов</p></div></div>
+        <div className="setup-section-title">
+          <span>2</span>
+          <div>
+            <h2>Правила матча</h2>
+            <p>Главные параметры — без лишних шагов</p>
+          </div>
+        </div>
         <GameModeSelector
-          mode={mode} onMode={setMode} startingScore={startingScore} onStartingScore={setStartingScore}
-          outRule={outRule} onOutRule={setOutRule} x01Format={x01Format} onX01Format={setX01Format}
-          visits={visits} custom={custom} onVisits={setVisits} onCustom={setCustom}
+          mode={mode}
+          onMode={setMode}
+          startingScore={startingScore}
+          onStartingScore={setStartingScore}
+          outRule={outRule}
+          onOutRule={setOutRule}
+          x01Format={x01Format}
+          onX01Format={setX01Format}
+          visits={visits}
+          custom={custom}
+          onVisits={setVisits}
+          onCustom={setCustom}
         />
-        <div className="setup-section-title compact"><span>3</span><div><h2>Кто начинает</h2></div></div>
+        <div className="setup-section-title compact">
+          <span>3</span>
+          <div>
+            <h2>Кто начинает</h2>
+          </div>
+        </div>
         <StarterSelector participants={participants} starter={starter} onStarter={setStarter} />
-        <button className="primary start" onClick={() => void start()} disabled={busy || !valid}>{busy ? "Создаём…" : t.start}</button>
-        {startError ? <p className="reason" role="alert">{startError}</p> : null}
+        <button className="primary start" onClick={() => void start()} disabled={busy || !valid}>
+          {busy ? 'Создаём…' : t.start}
+        </button>
+        {startError ? (
+          <p className="reason" role="alert">
+            {startError}
+          </p>
+        ) : null}
       </section>
-      <nav className="home-links"><button className="link-button" onClick={onHistory}>{t.history}</button><button className="link-button" onClick={onStatistics}>Статистика</button></nav>
+      <nav className="home-links">
+        <button className="link-button" onClick={onHistory}>
+          {t.history}
+        </button>
+        <button className="link-button" onClick={onStatistics}>
+          Статистика
+        </button>
+      </nav>
     </main>
   );
 }
 
 function TodayPanel({ summary }: { summary: TodaySummary }) {
-  return <section className="today-panel" aria-labelledby="today-title">
-    <div className="today-heading"><div><span>Текущий день</span><h2 id="today-title">Сегодня</h2></div><strong>{summary.completedMatches}</strong><small>{summary.completedMatches === 1 ? "матч" : summary.completedMatches < 5 ? "матча" : "матчей"}</small></div>
-    <div className="today-facts">
-      {summary.leader ? <p><span>{summary.leader.tied ? "Лидеры по победам" : "Больше всего побед"}</span><b>{summary.leader.name} · {summary.leader.wins}</b></p> : null}
-      {summary.bestVisit ? <p><span>Лучший подход</span><b>{summary.bestVisit.score} · {summary.bestVisit.name}</b></p> : null}
-      {summary.maximums > 0 ? <p><span>Максимумы 180</span><b>{summary.maximums}</b></p> : null}
-    </div>
-  </section>;
+  return (
+    <section className="today-panel" aria-labelledby="today-title">
+      <div className="today-heading">
+        <div>
+          <span>Текущий день</span>
+          <h2 id="today-title">Сегодня</h2>
+        </div>
+        <strong>{summary.completedMatches}</strong>
+        <small>{summary.completedMatches === 1 ? 'матч' : summary.completedMatches < 5 ? 'матча' : 'матчей'}</small>
+      </div>
+      <div className="today-facts">
+        {summary.leader ? (
+          <p>
+            <span>{summary.leader.tied ? 'Лидеры по победам' : 'Больше всего побед'}</span>
+            <b>
+              {summary.leader.name} · {summary.leader.wins}
+            </b>
+          </p>
+        ) : null}
+        {summary.bestVisit ? (
+          <p>
+            <span>Лучший подход</span>
+            <b>
+              {summary.bestVisit.score} · {summary.bestVisit.name}
+            </b>
+          </p>
+        ) : null}
+        {summary.maximums > 0 ? (
+          <p>
+            <span>Максимумы 180</span>
+            <b>{summary.maximums}</b>
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
-function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPlayer, onLeaveCompany, inviteLink, onRetry }: Pick<Props, "company" | "syncNote" | "onCreateCompany" | "onAddSharedPlayer" | "onLeaveCompany" | "inviteLink" | "onRetry">) {
-  const [companyName, setCompanyName] = useState("");
-  const [playerName, setPlayerName] = useState("");
+function CompanyContextPanel({
+  company,
+  syncNote,
+  onCreateCompany,
+  onAddSharedPlayer,
+  onLeaveCompany,
+  inviteLink,
+  onRetry,
+}: Pick<
+  Props,
+  'company' | 'syncNote' | 'onCreateCompany' | 'onAddSharedPlayer' | 'onLeaveCompany' | 'inviteLink' | 'onRetry'
+>) {
+  const [companyName, setCompanyName] = useState('');
+  const [playerName, setPlayerName] = useState('');
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string>();
@@ -132,8 +278,8 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
     setPlayerBusy(true);
     setPlayerError(undefined);
     void onAddSharedPlayer(playerName)
-      .then(() => setPlayerName(""))
-      .catch((cause: unknown) => setPlayerError(userMessage(cause, "Не удалось добавить игрока. Попробуйте ещё раз.")))
+      .then(() => setPlayerName(''))
+      .catch((cause: unknown) => setPlayerError(userMessage(cause, 'Не удалось добавить игрока. Попробуйте ещё раз.')))
       .finally(() => setPlayerBusy(false));
   };
 
@@ -141,8 +287,8 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
     setCopyNote(undefined);
     const link = inviteLink ?? location.href;
     void Promise.resolve(navigator.clipboard?.writeText(link))
-      .then(() => setCopyNote("Ссылка скопирована."))
-      .catch(() => setCopyNote("Скопировать не удалось — сохраните ссылку вручную."));
+      .then(() => setCopyNote('Ссылка скопирована.'))
+      .catch(() => setCopyNote('Скопировать не удалось — сохраните ссылку вручную.'));
   };
 
   const createCompany = async (event: FormEvent<HTMLFormElement>) => {
@@ -153,69 +299,203 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
     try {
       await onCreateCompany(companyName.trim());
     } catch {
-      setCreateError("Не удалось создать компанию. Проверьте подключение и попробуйте ещё раз.");
+      setCreateError('Не удалось создать компанию. Проверьте подключение и попробуйте ещё раз.');
     } finally {
       setCreateBusy(false);
     }
   };
 
-  if (company) return (
-    <section className="company-context" aria-label="Компания">
-      <div className="context-heading"><span className="context-icon" aria-hidden="true">◆</span><div><b>Компания{company.name ? ` · ${company.name}` : ""}</b><small>Общие профили, история и статистика</small></div></div>
-      <span className={syncNote ? "sync-state pending" : "sync-state saved"} role="status">{syncNote ?? "Все матчи синхронизированы"}</span>
-      <p className="company-guidance">Добавьте постоянных игроков ниже или сразу настройте и начните матч.</p>
-      <p className="company-guidance">Чтобы открыть эту же компанию на другом устройстве, отправьте игрокам ссылку-приглашение. Сохраните её: другого способа вернуться в компанию нет.</p>
-      <p className="invite-link"><span>Ссылка-приглашение</span><code>{inviteLink ?? location.href}</code></p>
-      <button className="link-button" onClick={copyInvite}>Скопировать ссылку для приглашения</button>
-      {copyNote ? <span className="invite-note" role="status">{copyNote}</span> : null}
-      {syncNote ? <button className="link-button" onClick={() => void onRetry?.().catch(() => undefined)}>Повторить</button> : null}
-      <button className="link-button" onClick={() => setConfirmLeave(true)}>Выйти из компании</button>
-      <label>Добавить игрока компании<input value={playerName} maxLength={80} disabled={playerBusy} onChange={(event) => setPlayerName(event.target.value)} /></label>
-      <button className="secondary" disabled={playerBusy || !playerName.trim()} onClick={addSharedPlayer}>{playerBusy ? "Добавляем…" : "Добавить игрока"}</button>
-      {playerError ? <p className="reason" role="alert">{playerError}</p> : null}
-      <Dialog
-        open={confirmLeave}
-        title="Выйти из компании?"
-        description={`Это устройство перестанет показывать общие профили, историю и статистику${company.name ? ` компании «${company.name}»` : ""}. Вернуться можно по ссылке-приглашению или из списка компаний на главном экране — ссылку лучше сохранить заранее.`}
-        confirmLabel="Выйти из компании"
-        destructive
-        onCancel={() => setConfirmLeave(false)}
-        onConfirm={() => { setConfirmLeave(false); onLeaveCompany?.(); }}
-      />
-    </section>
-  );
+  if (company)
+    return (
+      <section className="company-context" aria-label="Компания">
+        <div className="context-heading">
+          <span className="context-icon" aria-hidden="true">
+            ◆
+          </span>
+          <div>
+            <b>Компания{company.name ? ` · ${company.name}` : ''}</b>
+            <small>Общие профили, история и статистика</small>
+          </div>
+        </div>
+        <span className={syncNote ? 'sync-state pending' : 'sync-state saved'} role="status">
+          {syncNote ?? 'Все матчи синхронизированы'}
+        </span>
+        <p className="company-guidance">Добавьте постоянных игроков ниже или сразу настройте и начните матч.</p>
+        <p className="company-guidance">
+          Чтобы открыть эту же компанию на другом устройстве, отправьте игрокам ссылку-приглашение. Сохраните её:
+          другого способа вернуться в компанию нет.
+        </p>
+        <p className="invite-link">
+          <span>Ссылка-приглашение</span>
+          <code>{inviteLink ?? location.href}</code>
+        </p>
+        <button className="link-button" onClick={copyInvite}>
+          Скопировать ссылку для приглашения
+        </button>
+        {copyNote ? (
+          <span className="invite-note" role="status">
+            {copyNote}
+          </span>
+        ) : null}
+        {syncNote ? (
+          <button className="link-button" onClick={() => void onRetry?.().catch(() => undefined)}>
+            Повторить
+          </button>
+        ) : null}
+        <button className="link-button" onClick={() => setConfirmLeave(true)}>
+          Выйти из компании
+        </button>
+        <label>
+          Добавить игрока компании
+          <input
+            value={playerName}
+            maxLength={80}
+            disabled={playerBusy}
+            onChange={(event) => setPlayerName(event.target.value)}
+          />
+        </label>
+        <button className="secondary" disabled={playerBusy || !playerName.trim()} onClick={addSharedPlayer}>
+          {playerBusy ? 'Добавляем…' : 'Добавить игрока'}
+        </button>
+        {playerError ? (
+          <p className="reason" role="alert">
+            {playerError}
+          </p>
+        ) : null}
+        <Dialog
+          open={confirmLeave}
+          title="Выйти из компании?"
+          description={`Это устройство перестанет показывать общие профили, историю и статистику${company.name ? ` компании «${company.name}»` : ''}. Вернуться можно по ссылке-приглашению или из списка компаний на главном экране — ссылку лучше сохранить заранее.`}
+          confirmLabel="Выйти из компании"
+          destructive
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={() => {
+            setConfirmLeave(false);
+            onLeaveCompany?.();
+          }}
+        />
+      </section>
+    );
   return (
     <section className="company-context" aria-label="Создание компании">
-      <div className="context-heading"><span className="context-icon" aria-hidden="true">●</span><div><b>Локальная игра</b><small>Матчи хранятся только на этом устройстве</small></div></div>
+      <div className="context-heading">
+        <span className="context-icon" aria-hidden="true">
+          ●
+        </span>
+        <div>
+          <b>Локальная игра</b>
+          <small>Матчи хранятся только на этом устройстве</small>
+        </div>
+      </div>
       {creatingCompany ? (
         <form className="company-create-form" onSubmit={(event) => void createCompany(event)} aria-busy={createBusy}>
-          <p className="company-guidance">Создайте общее пространство для игроков, матчей и статистики. После создания здесь появятся название, приглашение и следующий шаг.</p>
-          <label>Название компании (необязательно)<input value={companyName} maxLength={80} disabled={createBusy} onChange={(event) => setCompanyName(event.target.value)} /></label>
-          {createError ? <p className="company-create-error" role="alert">{createError}</p> : null}
-          <button type="submit" className="primary" disabled={createBusy || !onCreateCompany}>{createBusy ? "Создаём компанию…" : "Создать"}</button>
+          <p className="company-guidance">
+            Создайте общее пространство для игроков, матчей и статистики. После создания здесь появятся название,
+            приглашение и следующий шаг.
+          </p>
+          <label>
+            Название компании (необязательно)
+            <input
+              value={companyName}
+              maxLength={80}
+              disabled={createBusy}
+              onChange={(event) => setCompanyName(event.target.value)}
+            />
+          </label>
+          {createError ? (
+            <p className="company-create-error" role="alert">
+              {createError}
+            </p>
+          ) : null}
+          <button type="submit" className="primary" disabled={createBusy || !onCreateCompany}>
+            {createBusy ? 'Создаём компанию…' : 'Создать'}
+          </button>
         </form>
-      ) : <button className="secondary" onClick={() => setCreatingCompany(true)}>Создать компанию</button>}
+      ) : (
+        <button className="secondary" onClick={() => setCreatingCompany(true)}>
+          Создать компанию
+        </button>
+      )}
     </section>
   );
 }
 
-function ParticipantList({ participants, saved, profileLabel, onCreateProfile, onChange, onRemove, onAdd }: { participants: readonly ParticipantDraft[]; saved: readonly Player[]; profileLabel: string; onCreateProfile?: ((name: string) => Promise<Player>) | undefined; onChange: (participants: ParticipantDraft[]) => void; onRemove: (index: number) => void; onAdd: () => void }) {
-  return <><div className="player-fields">{participants.map((participant, index) => (
-    <ParticipantRow key={index} participant={participant} index={index} saved={saved} profileLabel={profileLabel} onCreateProfile={onCreateProfile} removable={participants.length > 2} onChange={(next) => onChange(participants.map((item, itemIndex) => itemIndex === index ? next : item))} onRemove={() => onRemove(index)} />
-  ))}</div>{participants.length < 8 ? <button type="button" className="secondary add-player" onClick={onAdd}>+ Добавить игрока</button> : null}</>;
+function ParticipantList({
+  participants,
+  saved,
+  profileLabel,
+  onCreateProfile,
+  onChange,
+  onRemove,
+  onAdd,
+}: {
+  participants: readonly ParticipantDraft[];
+  saved: readonly Player[];
+  profileLabel: string;
+  onCreateProfile?: ((name: string) => Promise<Player>) | undefined;
+  onChange: (participants: ParticipantDraft[]) => void;
+  onRemove: (index: number) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <>
+      <div className="player-fields">
+        {participants.map((participant, index) => (
+          <ParticipantRow
+            key={index}
+            participant={participant}
+            index={index}
+            saved={saved}
+            profileLabel={profileLabel}
+            onCreateProfile={onCreateProfile}
+            removable={participants.length > 2}
+            onChange={(next) => onChange(participants.map((item, itemIndex) => (itemIndex === index ? next : item)))}
+            onRemove={() => onRemove(index)}
+          />
+        ))}
+      </div>
+      {participants.length < 8 ? (
+        <button type="button" className="secondary add-player" onClick={onAdd}>
+          + Добавить игрока
+        </button>
+      ) : null}
+    </>
+  );
 }
 
-function ParticipantRow({ participant, index, saved, profileLabel, onCreateProfile, removable, onChange, onRemove }: { participant: ParticipantDraft; index: number; saved: readonly Player[]; profileLabel: string; onCreateProfile?: ((name: string) => Promise<Player>) | undefined; removable: boolean; onChange: (participant: ParticipantDraft) => void; onRemove: () => void }) {
+function ParticipantRow({
+  participant,
+  index,
+  saved,
+  profileLabel,
+  onCreateProfile,
+  removable,
+  onChange,
+  onRemove,
+}: {
+  participant: ParticipantDraft;
+  index: number;
+  saved: readonly Player[];
+  profileLabel: string;
+  onCreateProfile?: ((name: string) => Promise<Player>) | undefined;
+  removable: boolean;
+  onChange: (participant: ParticipantDraft) => void;
+  onRemove: () => void;
+}) {
   const [creating, setCreating] = useState(false);
-  const [profileName, setProfileName] = useState("");
+  const [profileName, setProfileName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const selected = participant.playerId
-    ? saved.find((player) => player.id === participant.playerId) ?? { id: participant.playerId, name: participant.name, createdAt: "" }
+    ? (saved.find((player) => player.id === participant.playerId) ?? {
+        id: participant.playerId,
+        name: participant.name,
+        createdAt: '',
+      })
     : undefined;
   const openCreator = () => {
     const defaultName = `Игрок ${index + 1}`;
-    setProfileName(participant.name === defaultName ? "" : participant.name);
+    setProfileName(participant.name === defaultName ? '' : participant.name);
     setError(undefined);
     setCreating(true);
   };
@@ -229,54 +509,309 @@ function ParticipantRow({ participant, index, saved, profileLabel, onCreateProfi
       onChange({ name: player.name, playerId: player.id });
       setCreating(false);
     } catch {
-      setError("Не удалось создать профиль. Попробуйте ещё раз.");
+      setError('Не удалось создать профиль. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
   };
   return (
-    <article className={`participant-card ${selected ? "profile" : participant.missingPlayerId ? "missing" : "temporary"}`}>
-      <div className="participant-card-heading"><span>Игрок {index + 1}</span>{removable ? <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>×</button> : null}</div>
-      {selected ? <div className="selected-profile"><PlayerIdentity playerId={selected.id} name={selected.name} position={index} /><small>{profileLabel} · статистика сохраняется</small></div> : participant.missingPlayerId ? <div className="missing-profile" role="status"><b>{participant.name}</b><span>Этот профиль больше недоступен. Выберите другого игрока или сделайте слот временным.</span><button type="button" className="quiet-button" onClick={() => onChange({ name: participant.name })}>Оставить временным</button></div> : <>
-        <label className="temporary-name">Имя для этого матча<input aria-label={`Имя игрока ${index + 1}`} value={participant.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={28} /></label>
-        <p className="participant-semantic">Временный игрок · статистика только этого матча</p>
-      </>}
-      {saved.length || participant.missingPlayerId ? <label className="profile-picker">{selected || participant.missingPlayerId ? "Сменить игрока" : "Выбрать профиль"}<select aria-label={`Выбрать сохранённого игрока ${index + 1}`} value={participant.playerId ?? ""} onChange={(event) => { const player = saved.find((item) => item.id === event.target.value); onChange(player ? { name: player.name, playerId: player.id } : { name: participant.missingPlayerId ? participant.name : `Игрок ${index + 1}` }); }}><option value="">Временный игрок</option>{saved.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label> : null}
-      {onCreateProfile && !creating ? <button type="button" className="profile-slot-action" onClick={openCreator}>{selected ? "Создать другой профиль" : participant.name === `Игрок ${index + 1}` ? "Создать профиль" : "Сохранить как профиль"}</button> : null}
-      {creating ? <form className="slot-profile-form" onSubmit={(event) => void createAndSelect(event)} aria-busy={busy}>
-        <label>Имя профиля<input autoFocus value={profileName} maxLength={80} disabled={busy} onChange={(event) => setProfileName(event.target.value)} /></label>
-        <p>Профиль сохранит статистику между матчами.</p>
-        {error ? <p className="reason" role="alert">{error}</p> : null}
-        <div><button type="submit" className="secondary" disabled={busy || !profileName.trim()}>{busy ? "Создаём…" : "Создать и выбрать"}</button><button type="button" className="quiet-button" disabled={busy} onClick={() => setCreating(false)}>Отмена</button></div>
-      </form> : null}
+    <article
+      className={`participant-card ${selected ? 'profile' : participant.missingPlayerId ? 'missing' : 'temporary'}`}
+    >
+      <div className="participant-card-heading">
+        <span>Игрок {index + 1}</span>
+        {removable ? (
+          <button type="button" className="remove-player" onClick={onRemove} aria-label={`Удалить игрока ${index + 1}`}>
+            ×
+          </button>
+        ) : null}
+      </div>
+      {selected ? (
+        <div className="selected-profile">
+          <PlayerIdentity playerId={selected.id} name={selected.name} position={index} />
+          <small>{profileLabel} · статистика сохраняется</small>
+        </div>
+      ) : participant.missingPlayerId ? (
+        <div className="missing-profile" role="status">
+          <b>{participant.name}</b>
+          <span>Этот профиль больше недоступен. Выберите другого игрока или сделайте слот временным.</span>
+          <button type="button" className="quiet-button" onClick={() => onChange({ name: participant.name })}>
+            Оставить временным
+          </button>
+        </div>
+      ) : (
+        <>
+          <label className="temporary-name">
+            Имя для этого матча
+            <input
+              aria-label={`Имя игрока ${index + 1}`}
+              value={participant.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+              maxLength={28}
+            />
+          </label>
+          <p className="participant-semantic">Временный игрок · статистика только этого матча</p>
+        </>
+      )}
+      {saved.length || participant.missingPlayerId ? (
+        <label className="profile-picker">
+          {selected || participant.missingPlayerId ? 'Сменить игрока' : 'Выбрать профиль'}
+          <select
+            aria-label={`Выбрать сохранённого игрока ${index + 1}`}
+            value={participant.playerId ?? ''}
+            onChange={(event) => {
+              const player = saved.find((item) => item.id === event.target.value);
+              onChange(
+                player
+                  ? { name: player.name, playerId: player.id }
+                  : { name: participant.missingPlayerId ? participant.name : `Игрок ${index + 1}` },
+              );
+            }}
+          >
+            <option value="">Временный игрок</option>
+            {saved.map((player) => (
+              <option key={player.id} value={player.id}>
+                {player.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {onCreateProfile && !creating ? (
+        <button type="button" className="profile-slot-action" onClick={openCreator}>
+          {selected
+            ? 'Создать другой профиль'
+            : participant.name === `Игрок ${index + 1}`
+              ? 'Создать профиль'
+              : 'Сохранить как профиль'}
+        </button>
+      ) : null}
+      {creating ? (
+        <form className="slot-profile-form" onSubmit={(event) => void createAndSelect(event)} aria-busy={busy}>
+          <label>
+            Имя профиля
+            <input
+              autoFocus
+              value={profileName}
+              maxLength={80}
+              disabled={busy}
+              onChange={(event) => setProfileName(event.target.value)}
+            />
+          </label>
+          <p>Профиль сохранит статистику между матчами.</p>
+          {error ? (
+            <p className="reason" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div>
+            <button type="submit" className="secondary" disabled={busy || !profileName.trim()}>
+              {busy ? 'Создаём…' : 'Создать и выбрать'}
+            </button>
+            <button type="button" className="quiet-button" disabled={busy} onClick={() => setCreating(false)}>
+              Отмена
+            </button>
+          </div>
+        </form>
+      ) : null}
     </article>
   );
 }
 
 type GameModeSelectorProps = {
-  mode: "x01" | "fixed_visits"; onMode: (mode: "x01" | "fixed_visits") => void;
-  startingScore: 301 | 501 | 701; onStartingScore: (score: 301 | 501 | 701) => void;
-  outRule: "straight" | "double"; onOutRule: (rule: "straight" | "double") => void;
-  x01Format: "unlimited" | "limited"; onX01Format: (format: "unlimited" | "limited") => void;
-  visits: number; custom: boolean; onVisits: (value: number) => void; onCustom: (value: boolean) => void;
+  mode: 'x01' | 'fixed_visits';
+  onMode: (mode: 'x01' | 'fixed_visits') => void;
+  startingScore: 301 | 501 | 701;
+  onStartingScore: (score: 301 | 501 | 701) => void;
+  outRule: 'straight' | 'double';
+  onOutRule: (rule: 'straight' | 'double') => void;
+  x01Format: 'unlimited' | 'limited';
+  onX01Format: (format: 'unlimited' | 'limited') => void;
+  visits: number;
+  custom: boolean;
+  onVisits: (value: number) => void;
+  onCustom: (value: boolean) => void;
 };
 
-function GameModeSelector({ mode, onMode, startingScore, onStartingScore, outRule, onOutRule, x01Format, onX01Format, visits, custom, onVisits, onCustom }: GameModeSelectorProps) {
-  return <>
-    <fieldset><legend>{t.mode}</legend><div className="segments"><button type="button" className={mode === "x01" ? "selected" : ""} onClick={() => onMode("x01")}>X01</button><button type="button" className={mode === "fixed_visits" ? "selected" : ""} onClick={() => onMode("fixed_visits")}>{t.series}</button></div></fieldset>
-    {mode === "x01" ? <>
-      <fieldset><legend>Стартовый счёт</legend><div className="x01-presets" role="radiogroup" aria-label="Стартовый счёт X01">{([301, 501, 701] as const).map((score) => <label key={score} className={startingScore === score ? "selected" : ""}><input type="radio" name="starting-score" value={score} checked={startingScore === score} onChange={() => onStartingScore(score)} /><strong>{score}</strong><span>{score === 301 ? "короткая" : score === 501 ? "классика" : "длинная"}</span><i aria-hidden="true">✓</i></label>)}</div></fieldset>
-      <fieldset><legend>Завершение</legend><div className="segments"><button type="button" className={outRule === "straight" ? "selected" : ""} onClick={() => onOutRule("straight")}>Любым попаданием</button><button type="button" className={outRule === "double" ? "selected" : ""} onClick={() => onOutRule("double")}>Удвоением</button></div><p className="hint">{outRule === "straight" ? "Для победы достаточно получить ровно 0." : "Последний дротик должен попасть в удвоение или Bull."}</p></fieldset>
-      <fieldset><legend>Формат X01</legend><div className="segments"><button type="button" className={x01Format === "unlimited" ? "selected" : ""} onClick={() => onX01Format("unlimited")}>До победы</button><button type="button" className={x01Format === "limited" ? "selected" : ""} onClick={() => onX01Format("limited")}>Ограничить количество подходов</button></div></fieldset>
-      {x01Format === "limited" ? <VisitsField visits={visits} custom={custom} onVisits={onVisits} onCustom={onCustom} /> : null}
-    </> : <VisitsField visits={visits} custom={custom} onVisits={onVisits} onCustom={onCustom} />}
-  </>;
+function GameModeSelector({
+  mode,
+  onMode,
+  startingScore,
+  onStartingScore,
+  outRule,
+  onOutRule,
+  x01Format,
+  onX01Format,
+  visits,
+  custom,
+  onVisits,
+  onCustom,
+}: GameModeSelectorProps) {
+  return (
+    <>
+      <fieldset>
+        <legend>{t.mode}</legend>
+        <div className="segments">
+          <button type="button" className={mode === 'x01' ? 'selected' : ''} onClick={() => onMode('x01')}>
+            X01
+          </button>
+          <button
+            type="button"
+            className={mode === 'fixed_visits' ? 'selected' : ''}
+            onClick={() => onMode('fixed_visits')}
+          >
+            {t.series}
+          </button>
+        </div>
+      </fieldset>
+      {mode === 'x01' ? (
+        <>
+          <fieldset>
+            <legend>Стартовый счёт</legend>
+            <div className="x01-presets" role="radiogroup" aria-label="Стартовый счёт X01">
+              {([301, 501, 701] as const).map((score) => (
+                <label key={score} className={startingScore === score ? 'selected' : ''}>
+                  <input
+                    type="radio"
+                    name="starting-score"
+                    value={score}
+                    checked={startingScore === score}
+                    onChange={() => onStartingScore(score)}
+                  />
+                  <strong>{score}</strong>
+                  <span>{score === 301 ? 'короткая' : score === 501 ? 'классика' : 'длинная'}</span>
+                  <i aria-hidden="true">✓</i>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Завершение</legend>
+            <div className="segments">
+              <button
+                type="button"
+                className={outRule === 'straight' ? 'selected' : ''}
+                onClick={() => onOutRule('straight')}
+              >
+                Любым попаданием
+              </button>
+              <button
+                type="button"
+                className={outRule === 'double' ? 'selected' : ''}
+                onClick={() => onOutRule('double')}
+              >
+                Удвоением
+              </button>
+            </div>
+            <p className="hint">
+              {outRule === 'straight'
+                ? 'Для победы достаточно получить ровно 0.'
+                : 'Последний дротик должен попасть в удвоение или Bull.'}
+            </p>
+          </fieldset>
+          <fieldset>
+            <legend>Формат X01</legend>
+            <div className="segments">
+              <button
+                type="button"
+                className={x01Format === 'unlimited' ? 'selected' : ''}
+                onClick={() => onX01Format('unlimited')}
+              >
+                До победы
+              </button>
+              <button
+                type="button"
+                className={x01Format === 'limited' ? 'selected' : ''}
+                onClick={() => onX01Format('limited')}
+              >
+                Ограничить количество подходов
+              </button>
+            </div>
+          </fieldset>
+          {x01Format === 'limited' ? (
+            <VisitsField visits={visits} custom={custom} onVisits={onVisits} onCustom={onCustom} />
+          ) : null}
+        </>
+      ) : (
+        <VisitsField visits={visits} custom={custom} onVisits={onVisits} onCustom={onCustom} />
+      )}
+    </>
+  );
 }
 
-function StarterSelector({ participants, starter, onStarter }: { participants: readonly ParticipantDraft[]; starter: number | "random"; onStarter: (starter: number | "random") => void }) {
-  return <fieldset><legend>{t.starts}</legend><div className="starter-grid">{participants.map((participant, index) => <button type="button" key={index} className={starter === index ? "selected" : ""} onClick={() => onStarter(index)}>{participant.name || `Игрок ${index + 1}`}</button>)}<button type="button" className={starter === "random" ? "selected" : ""} onClick={() => onStarter("random")}>{t.random}</button></div></fieldset>;
+function StarterSelector({
+  participants,
+  starter,
+  onStarter,
+}: {
+  participants: readonly ParticipantDraft[];
+  starter: number | 'random';
+  onStarter: (starter: number | 'random') => void;
+}) {
+  return (
+    <fieldset>
+      <legend>{t.starts}</legend>
+      <div className="starter-grid">
+        {participants.map((participant, index) => (
+          <button
+            type="button"
+            key={index}
+            className={starter === index ? 'selected' : ''}
+            onClick={() => onStarter(index)}
+          >
+            {participant.name || `Игрок ${index + 1}`}
+          </button>
+        ))}
+        <button type="button" className={starter === 'random' ? 'selected' : ''} onClick={() => onStarter('random')}>
+          {t.random}
+        </button>
+      </div>
+    </fieldset>
+  );
 }
 
-function VisitsField({ visits, custom, onVisits, onCustom }: { visits: number; custom: boolean; onVisits: (value: number) => void; onCustom: (value: boolean) => void }) {
-  return <fieldset><legend>{t.visits}</legend><div className="segments five">{[5, 10, 20, 30].map((value) => <button type="button" key={value} className={!custom && visits === value ? "selected" : ""} onClick={() => { onVisits(value); onCustom(false); }}>{value}</button>)}<button type="button" className={custom ? "selected" : ""} onClick={() => onCustom(true)}>{t.other}</button></div>{custom ? <input type="number" min="1" max="999" value={visits} onChange={(event) => onVisits(Number(event.target.value))} aria-label="Другое количество подходов" /> : null}</fieldset>;
+function VisitsField({
+  visits,
+  custom,
+  onVisits,
+  onCustom,
+}: {
+  visits: number;
+  custom: boolean;
+  onVisits: (value: number) => void;
+  onCustom: (value: boolean) => void;
+}) {
+  return (
+    <fieldset>
+      <legend>{t.visits}</legend>
+      <div className="segments five">
+        {[5, 10, 20, 30].map((value) => (
+          <button
+            type="button"
+            key={value}
+            className={!custom && visits === value ? 'selected' : ''}
+            onClick={() => {
+              onVisits(value);
+              onCustom(false);
+            }}
+          >
+            {value}
+          </button>
+        ))}
+        <button type="button" className={custom ? 'selected' : ''} onClick={() => onCustom(true)}>
+          {t.other}
+        </button>
+      </div>
+      {custom ? (
+        <input
+          type="number"
+          min="1"
+          max="999"
+          value={visits}
+          onChange={(event) => onVisits(Number(event.target.value))}
+          aria-label="Другое количество подходов"
+        />
+      ) : null}
+    </fieldset>
+  );
 }

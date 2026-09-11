@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from "react";
-import type { Match, Player } from "../../domain/match/models";
-import type { useCompanySync } from "./useCompanySync";
-import type { useMatchSession } from "./useMatchSession";
+import { useCallback, useMemo } from 'react';
+import type { Match, Player } from '../../domain/match/models';
+import type { useCompanySync } from './useCompanySync';
+import type { useMatchSession } from './useMatchSession';
 
 type CompanyState = ReturnType<typeof useCompanySync>;
 type MatchState = ReturnType<typeof useMatchSession>;
@@ -30,20 +30,28 @@ export function useDataSource(company: CompanyState, match: MatchState): DataSou
   const shared = Boolean(company.company);
   const activeMatch = (match.active ?? match.resume)?.snapshot.match;
 
-  const deletePlayer = useCallback(async (playerId: string) => {
-    if (activeMatch?.status === "in_progress" && activeMatch.players.includes(playerId))
-      throw new Error("Нельзя удалить игрока из незавершённого матча.");
-    await (shared ? company.deletePlayer(playerId) : match.deletePlayer(playerId));
-  }, [activeMatch, company, match, shared]);
+  const deletePlayer = useCallback(
+    async (playerId: string) => {
+      if (activeMatch?.status === 'in_progress' && activeMatch.players.includes(playerId))
+        throw new Error('Нельзя удалить игрока из незавершённого матча.');
+      await (shared ? company.deletePlayer(playerId) : match.deletePlayer(playerId));
+    },
+    [activeMatch, company, match, shared],
+  );
 
-  return useMemo<DataSource>(() => ({
-    shared,
-    players: shared ? company.players : match.players,
-    history: shared ? company.history : match.history,
-    addPlayer: shared ? company.addPlayer : match.addPlayer,
-    renamePlayer: shared ? company.renamePlayer : match.renamePlayer,
-    resetPlayerStatistics: shared ? company.resetPlayerStatistics : match.resetPlayerStatistics,
-    deletePlayer,
-    deleteMatch: async (matchId: string) => { await (shared ? company.deleteMatch(matchId) : match.deleteMatch(matchId)); },
-  }), [company, deletePlayer, match, shared]);
+  return useMemo<DataSource>(
+    () => ({
+      shared,
+      players: shared ? company.players : match.players,
+      history: shared ? company.history : match.history,
+      addPlayer: shared ? company.addPlayer : match.addPlayer,
+      renamePlayer: shared ? company.renamePlayer : match.renamePlayer,
+      resetPlayerStatistics: shared ? company.resetPlayerStatistics : match.resetPlayerStatistics,
+      deletePlayer,
+      deleteMatch: async (matchId: string) => {
+        await (shared ? company.deleteMatch(matchId) : match.deleteMatch(matchId));
+      },
+    }),
+    [company, deletePlayer, match, shared],
+  );
 }

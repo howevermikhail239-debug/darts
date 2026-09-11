@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createLastSetupTemplate,
   lastSetupContext,
   type LastSetupRepository,
   type LastSetupTemplate,
-} from "../../application/LastSetup";
-import type { MatchParticipantInput } from "../../application/StartMatch";
-import type { MatchSetup } from "../../domain/match/createMatch";
+} from '../../application/LastSetup';
+import type { MatchParticipantInput } from '../../application/StartMatch';
+import type { MatchSetup } from '../../domain/match/createMatch';
 
 export function useLastSetup(repository: LastSetupRepository, companyToken?: string) {
   const context = lastSetupContext(companyToken);
@@ -19,18 +19,24 @@ export function useLastSetup(repository: LastSetupRepository, companyToken?: str
 
   useEffect(() => {
     const expected = ++generation.current;
-    void repository.load(context).then((template) => {
-      if (generation.current === expected) setState({ context, ready: true, ...(template ? { template } : {}) });
-    }).catch(() => {
-      if (generation.current === expected) setState({ context, ready: true });
-    });
+    void repository
+      .load(context)
+      .then((template) => {
+        if (generation.current === expected) setState({ context, ready: true, ...(template ? { template } : {}) });
+      })
+      .catch(() => {
+        if (generation.current === expected) setState({ context, ready: true });
+      });
   }, [context, repository]);
 
-  const remember = useCallback(async (participants: readonly MatchParticipantInput[], setup: MatchSetup) => {
-    const template = createLastSetupTemplate(participants, setup);
-    await repository.save(context, template);
-    if (context === lastSetupContext(companyToken)) setState({ context, ready: true, template });
-  }, [companyToken, context, repository]);
+  const remember = useCallback(
+    async (participants: readonly MatchParticipantInput[], setup: MatchSetup) => {
+      const template = createLastSetupTemplate(participants, setup);
+      await repository.save(context, template);
+      if (context === lastSetupContext(companyToken)) setState({ context, ready: true, template });
+    },
+    [companyToken, context, repository],
+  );
 
   return { loading, template: state.context === context ? state.template : undefined, remember, context };
 }

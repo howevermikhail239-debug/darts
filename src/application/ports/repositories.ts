@@ -12,21 +12,21 @@ export type ActiveMatchRecord = Readonly<{
   previous?: Match;
   draft: ActiveVisitDraft;
   companyToken?: string;
-  draftRecovery?: "discarded_corrupt" | "missing_legacy";
+  draftRecovery?: 'discarded_corrupt' | 'missing_legacy';
   /** Монотонная ревизия конверта активного матча (оптимистическая блокировка между вкладками). */
   revision?: number;
 }>;
 /** Почему активный матч не был восстановлен, хотя запись в хранилище есть. */
-export type ActiveMatchIssue = "future_version";
+export type ActiveMatchIssue = 'future_version';
 /** Событие об изменении активного матча в другой вкладке этого же браузера. */
 export type ExternalActiveMatchChange = Readonly<{
-  kind: "saved" | "cleared";
+  kind: 'saved' | 'cleared';
   revision: number;
   matchId?: string;
 }>;
 export interface MatchRepository {
   saveActive(record: ActiveMatchRecord): Promise<void>;
-  loadActive(): Promise<ActiveMatchRecord|undefined>;
+  loadActive(): Promise<ActiveMatchRecord | undefined>;
   archiveAndClearActive(match: Match): Promise<void>;
   listHistory(): Promise<readonly Match[]>;
   deleteHistory?(matchId: string): Promise<boolean>;
@@ -44,8 +44,15 @@ export interface MatchRepository {
 export const isActiveMatchConflict = (error: unknown): boolean =>
   error instanceof Error && error.name === 'ActiveMatchConflictError';
 
-export interface PlayerRepository { list(): Promise<readonly Player[]>; save(player: Player): Promise<void>; delete?(playerId: PlayerId): Promise<boolean>; }
-export interface SettingsRepository { load(): Promise<Readonly<Record<string,string>>>; save(values: Readonly<Record<string,string>>): Promise<void>; }
+export interface PlayerRepository {
+  list(): Promise<readonly Player[]>;
+  save(player: Player): Promise<void>;
+  delete?(playerId: PlayerId): Promise<boolean>;
+}
+export interface SettingsRepository {
+  load(): Promise<Readonly<Record<string, string>>>;
+  save(values: Readonly<Record<string, string>>): Promise<void>;
+}
 
 /** Состояние локальной записи матча компании. */
 export type SharedMatchState = 'pending' | 'synced' | 'error' | 'rejected';

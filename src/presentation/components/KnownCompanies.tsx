@@ -1,4 +1,4 @@
-import type { SharedCompany } from "../../application/CompanySync";
+import type { SharedCompany } from '../../application/CompanySync';
 
 type Props = {
   companies: readonly SharedCompany[];
@@ -24,12 +24,20 @@ export function KnownCompanies({ companies, currentToken, onOpen }: Props) {
           return (
             <li key={company.token}>
               <span>
-                <b>{company.name || "Компания без названия"}</b>
-                <small>{current ? "Открыта сейчас" : `Открывали ${new Date(company.createdAt).toLocaleDateString("ru-RU")}`}</small>
+                <b>{company.name || 'Компания без названия'}</b>
+                <small>
+                  {current ? 'Открыта сейчас' : `Открывали ${new Date(company.createdAt).toLocaleDateString('ru-RU')}`}
+                </small>
               </span>
-              {current
-                ? <span className="known-companies-current" role="status">Текущая</span>
-                : <button className="secondary" onClick={() => onOpen(company.token)}>Открыть</button>}
+              {current ? (
+                <span className="known-companies-current" role="status">
+                  Текущая
+                </span>
+              ) : (
+                <button className="secondary" onClick={() => onOpen(company.token)}>
+                  Открыть
+                </button>
+              )}
             </li>
           );
         })}

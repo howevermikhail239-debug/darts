@@ -39,5 +39,7 @@ export function pendingAppUpdate(): ApplyUpdate | undefined {
 
 export function subscribeToAppUpdate(listener: Listener): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }

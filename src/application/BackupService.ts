@@ -18,7 +18,11 @@ export async function exportBackup(repository: BackupRepository, now: () => stri
 
 export async function restoreBackup(repository: BackupRepository, json: string): Promise<void> {
   let parsed: unknown;
-  try { parsed = JSON.parse(json); } catch { throw new Error('Файл не является корректным JSON.'); }
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error('Файл не является корректным JSON.');
+  }
   if (!parsed || typeof parsed !== 'object') throw new Error('Некорректный формат резервной копии.');
   const value = parsed as Record<string, unknown>;
   if (value.type !== BACKUP_TYPE) throw new Error('Это не резервная копия Dart Scorekeeper.');

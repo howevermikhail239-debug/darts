@@ -1,6 +1,6 @@
-import type { MatchSetup } from "../domain/match/createMatch";
-import type { Player, PlayerId } from "../domain/match/models";
-import type { MatchParticipantInput } from "./StartMatch";
+import type { MatchSetup } from '../domain/match/createMatch';
+import type { Player, PlayerId } from '../domain/match/models';
+import type { MatchParticipantInput } from './StartMatch';
 
 export type LastSetupParticipant = Readonly<{
   name: string;
@@ -17,8 +17,7 @@ export interface LastSetupRepository {
   save(context: string, template: LastSetupTemplate): Promise<void>;
 }
 
-export const lastSetupContext = (companyToken?: string): string =>
-  companyToken ? `company:${companyToken}` : "local";
+export const lastSetupContext = (companyToken?: string): string => (companyToken ? `company:${companyToken}` : 'local');
 
 export function createLastSetupTemplate(
   participants: readonly MatchParticipantInput[],

@@ -1,9 +1,9 @@
-import type { SessionSnapshot } from "../../application/GameSession";
-import type { Match, Player, PlayerId } from "../../domain/match/models";
-import { statisticsForMatch } from "../../domain/statistics/StatisticsCalculator";
-import { draftIsEmpty, isDetailedDraft } from "../../domain/match/VisitDraft";
-import { checkoutSuggestion, checkoutText } from "../../domain/rules/checkoutSuggestion";
-import { victoryTitle } from "../players/victoryTitle";
+import type { SessionSnapshot } from '../../application/GameSession';
+import type { Match, Player, PlayerId } from '../../domain/match/models';
+import { statisticsForMatch } from '../../domain/statistics/StatisticsCalculator';
+import { draftIsEmpty, isDetailedDraft } from '../../domain/match/VisitDraft';
+import { checkoutSuggestion, checkoutText } from '../../domain/rules/checkoutSuggestion';
+import { victoryTitle } from '../players/victoryTitle';
 
 export type ScoreboardRowViewModel = Readonly<{
   playerId: PlayerId;
@@ -11,7 +11,7 @@ export type ScoreboardRowViewModel = Readonly<{
   active: boolean;
   score: number;
   average: string;
-  lastScore: number | "—";
+  lastScore: number | '—';
   temporary: boolean;
   position: number;
   scoreRevision: string;
@@ -54,68 +54,81 @@ const statisticsOf = (match: Match): ReturnType<typeof statisticsForMatch> => {
 };
 
 const displayName = (match: Match, players: readonly Player[], playerId: PlayerId): string =>
-  players.find((player) => player.id === playerId)?.name ?? match.participantNames[playerId] ?? "Игрок";
+  players.find((player) => player.id === playerId)?.name ?? match.participantNames[playerId] ?? 'Игрок';
 
 const visitProgress = (values: readonly (number | undefined)[], total: number): string => {
-  if (values.length === 0 || values.some((value) => typeof value !== "number" || !Number.isFinite(value)))
-    return "Состояние матча повреждено";
+  if (values.length === 0 || values.some((value) => typeof value !== 'number' || !Number.isFinite(value)))
+    return 'Состояние матча повреждено';
   return `Подход ${Math.min(...(values as number[])) + 1} из ${total}`;
 };
 
-export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Player[], persistentPlayerIds: readonly PlayerId[] = players.map((player) => player.id)): GameViewModel {
+export function toGameViewModel(
+  snapshot: SessionSnapshot,
+  players: readonly Player[],
+  persistentPlayerIds: readonly PlayerId[] = players.map((player) => player.id),
+): GameViewModel {
   const match = snapshot.match;
   const stats = statisticsOf(match);
   const currentPlayerId = match.players[match.currentPlayerIndex];
-  if (!currentPlayerId) throw new Error("Некорректный текущий игрок матча");
+  if (!currentPlayerId) throw new Error('Некорректный текущий игрок матча');
   let title: string;
   let phaseLabel: string;
   let awaitingTieDecision: boolean;
   let canCompleteDraw: boolean;
   let inExtraRound: boolean;
 
-  if (match.state.kind === "x01") {
+  if (match.state.kind === 'x01') {
     const phase = match.state.phase;
-    title = match.state.format.kind === "limited"
-      ? `${match.state.startingScore} · ${match.state.format.visitsPerPlayer} подходов`
-      : `${match.state.startingScore} · до победы`;
-    awaitingTieDecision = phase.kind === "awaiting_tie_break";
-    canCompleteDraw = phase.kind === "awaiting_tie_break" && phase.round >= 2;
-    inExtraRound = phase.kind === "tie_break";
-    phaseLabel = phase.kind === "tie_break"
-      ? `Дополнительный подход ${phase.round}`
-      : awaitingTieDecision
-        ? "Ничья по минимальному остатку"
-        : match.state.format.kind === "limited"
-          ? visitProgress(match.players.map((id) => match.state.kind === "x01" ? match.state.visitsCompleted[id] : undefined), match.state.format.visitsPerPlayer)
-          : "Точный выход в 0";
+    title =
+      match.state.format.kind === 'limited'
+        ? `${match.state.startingScore} · ${match.state.format.visitsPerPlayer} подходов`
+        : `${match.state.startingScore} · до победы`;
+    awaitingTieDecision = phase.kind === 'awaiting_tie_break';
+    canCompleteDraw = phase.kind === 'awaiting_tie_break' && phase.round >= 2;
+    inExtraRound = phase.kind === 'tie_break';
+    phaseLabel =
+      phase.kind === 'tie_break'
+        ? `Дополнительный подход ${phase.round}`
+        : awaitingTieDecision
+          ? 'Ничья по минимальному остатку'
+          : match.state.format.kind === 'limited'
+            ? visitProgress(
+                match.players.map((id) => (match.state.kind === 'x01' ? match.state.visitsCompleted[id] : undefined)),
+                match.state.format.visitsPerPlayer,
+              )
+            : 'Точный выход в 0';
   } else {
     const phase = match.state.phase;
     title = `Серия · ${match.state.visitsPerPlayer} подходов`;
-    awaitingTieDecision = phase.kind === "awaiting_tie_decision";
+    awaitingTieDecision = phase.kind === 'awaiting_tie_decision';
     canCompleteDraw = awaitingTieDecision;
-    inExtraRound = phase.kind === "extra_round";
-    phaseLabel = phase.kind === "extra_round"
-      ? `Дополнительный подход ${phase.round}`
-      : awaitingTieDecision
-        ? "Ничья после основных подходов"
-        : visitProgress(match.players.map((id) => match.state.kind === "fixed_visits" ? match.state.regulationCompleted[id] : undefined), match.state.visitsPerPlayer);
+    inExtraRound = phase.kind === 'extra_round';
+    phaseLabel =
+      phase.kind === 'extra_round'
+        ? `Дополнительный подход ${phase.round}`
+        : awaitingTieDecision
+          ? 'Ничья после основных подходов'
+          : visitProgress(
+              match.players.map((id) =>
+                match.state.kind === 'fixed_visits' ? match.state.regulationCompleted[id] : undefined,
+              ),
+              match.state.visitsPerPlayer,
+            );
   }
 
   const scoreboard = match.players.map((playerId, index): ScoreboardRowViewModel => {
     const last = match.confirmedVisits.filter((visit) => visit.playerId === playerId).at(-1);
-    const score = match.state.kind === "x01"
-      ? match.state.remaining[playerId]
-      : match.state.totals[playerId];
+    const score = match.state.kind === 'x01' ? match.state.remaining[playerId] : match.state.totals[playerId];
     return {
       playerId,
       name: displayName(match, players, playerId),
       active: index === match.currentPlayerIndex,
       score: score ?? 0,
-      average: stats[playerId]?.averagePerVisit.toFixed(1) ?? "0,0",
-      lastScore: last?.awardedScore ?? "—",
+      average: stats[playerId]?.averagePerVisit.toFixed(1) ?? '0,0',
+      lastScore: last?.awardedScore ?? '—',
       temporary: !persistentPlayerIds.includes(playerId),
       position: index,
-      scoreRevision: last?.id ?? "initial",
+      scoreRevision: last?.id ?? 'initial',
     };
   });
   const winnerName = match.winnerId ? displayName(match, players, match.winnerId) : undefined;
@@ -125,35 +138,51 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       ? `Незавершённый подход · ${snapshot.draft.darts.length}/3 дротика`
       : `Незавершённый подход · сумма ${snapshot.draft.score}`;
   const dartsRemaining = isDetailedDraft(snapshot.draft) ? 3 - snapshot.draft.darts.length : 0;
-  const checkoutScore = snapshot.evaluation.remainingAfter ?? (match.state.kind === "x01" ? match.state.remaining[currentPlayerId] : undefined);
-  const checkout = match.state.kind === "x01" && match.state.phase.kind === "regulation" && checkoutScore !== undefined
-    ? checkoutSuggestion(checkoutScore, dartsRemaining, match.state.outRule) : undefined;
+  const checkoutScore =
+    snapshot.evaluation.remainingAfter ??
+    (match.state.kind === 'x01' ? match.state.remaining[currentPlayerId] : undefined);
+  const checkout =
+    match.state.kind === 'x01' && match.state.phase.kind === 'regulation' && checkoutScore !== undefined
+      ? checkoutSuggestion(checkoutScore, dartsRemaining, match.state.outRule)
+      : undefined;
 
   return {
     match,
     title,
     phaseLabel,
     currentPlayerName: displayName(match, players, currentPlayerId),
-    ...(match.state.kind === "x01" ? { currentPlayerDetail: `остаток: ${match.state.remaining[currentPlayerId]}` } : {}),
+    ...(match.state.kind === 'x01'
+      ? { currentPlayerDetail: `остаток: ${match.state.remaining[currentPlayerId]}` }
+      : {}),
     ...(draftDescription ? { draftDescription } : {}),
     scoreboard,
     awaitingTieDecision,
     canCompleteDraw,
     inExtraRound,
-    completed: match.status === "completed",
-    abandoned: match.status === "abandoned",
-    canConfirm: !awaitingTieDecision && !snapshot.isConfirming && !snapshot.isPersistingDraft && snapshot.evaluation.status !== "in_progress" && snapshot.evaluation.status !== "invalid",
-    canAddNextDart: !awaitingTieDecision && !snapshot.isConfirming && !snapshot.isPersistingDraft && snapshot.evaluation.canAddNextDart,
+    completed: match.status === 'completed',
+    abandoned: match.status === 'abandoned',
+    canConfirm:
+      !awaitingTieDecision &&
+      !snapshot.isConfirming &&
+      !snapshot.isPersistingDraft &&
+      snapshot.evaluation.status !== 'in_progress' &&
+      snapshot.evaluation.status !== 'invalid',
+    canAddNextDart:
+      !awaitingTieDecision &&
+      !snapshot.isConfirming &&
+      !snapshot.isPersistingDraft &&
+      snapshot.evaluation.canAddNextDart,
     confirmLabel: snapshot.isConfirming
-      ? "Сохраняем…"
-      : snapshot.evaluation.status === "bust"
-        ? "Подтвердить перебор"
+      ? 'Сохраняем…'
+      : snapshot.evaluation.status === 'bust'
+        ? 'Подтвердить перебор'
         : `Подтвердить ${snapshot.evaluation.awardedScore}`,
     ...(checkout ? { checkoutHint: `${checkoutScore} → ${checkoutText(checkout)}` } : {}),
-    draftHint: match.state.kind === "fixed_visits"
-      ? "Введите все три физических дротика"
-      : "Можно подтвердить после трёх дротиков или досрочного завершения",
-    summaryEyeline: match.state.kind === "x01" ? String(match.state.startingScore) : "Серия завершена",
+    draftHint:
+      match.state.kind === 'fixed_visits'
+        ? 'Введите все три физических дротика'
+        : 'Можно подтвердить после трёх дротиков или досрочного завершения',
+    summaryEyeline: match.state.kind === 'x01' ? String(match.state.startingScore) : 'Серия завершена',
     summaryTitle: victoryTitle(winnerName),
   };
 }

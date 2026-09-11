@@ -1,4 +1,4 @@
-export type HapticEvent = "confirm" | "bust" | "maximum" | "win";
+export type HapticEvent = 'confirm' | 'bust' | 'maximum' | 'win';
 
 const patterns: Record<HapticEvent, number | readonly number[]> = {
   confirm: 18,
@@ -7,7 +7,15 @@ const patterns: Record<HapticEvent, number | readonly number[]> = {
   win: [35, 35, 70],
 };
 
-export function vibrateFor(event: HapticEvent, enabled: boolean, navigatorLike: Pick<Navigator, "vibrate"> | undefined = typeof navigator === "undefined" ? undefined : navigator): boolean {
-  if (!enabled || typeof navigatorLike?.vibrate !== "function") return false;
-  try { return navigatorLike.vibrate(patterns[event] as VibratePattern); } catch { return false; }
+export function vibrateFor(
+  event: HapticEvent,
+  enabled: boolean,
+  navigatorLike: Pick<Navigator, 'vibrate'> | undefined = typeof navigator === 'undefined' ? undefined : navigator,
+): boolean {
+  if (!enabled || typeof navigatorLike?.vibrate !== 'function') return false;
+  try {
+    return navigatorLike.vibrate(patterns[event] as VibratePattern);
+  } catch {
+    return false;
+  }
 }

@@ -45,7 +45,9 @@ export class CompanySync {
   private issues: SnapshotIssues | undefined;
 
   /** Признак для интерфейса: сервер прислал записи, которые пришлось пропустить. */
-  lastSnapshotIssues(): SnapshotIssues | undefined { return this.issues; }
+  lastSnapshotIssues(): SnapshotIssues | undefined {
+    return this.issues;
+  }
   private remember(snapshot: { skippedMatches?: number; skippedPlayers?: number }): void {
     this.issues = { skippedMatches: snapshot.skippedMatches ?? 0, skippedPlayers: snapshot.skippedPlayers ?? 0 };
   }
@@ -58,12 +60,18 @@ export class CompanySync {
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.mutations.then(operation, operation);
-    this.mutations = result.then(() => undefined, () => undefined);
+    this.mutations = result.then(
+      () => undefined,
+      () => undefined,
+    );
     return result;
   }
 
   private async mutatePlayers(token: string, mutate: (current: readonly Player[]) => readonly Player[]): Promise<void> {
-    if (this.cache.updatePlayers) { await this.cache.updatePlayers(token, mutate); return; }
+    if (this.cache.updatePlayers) {
+      await this.cache.updatePlayers(token, mutate);
+      return;
+    }
     await this.cache.savePlayers(token, mutate(await this.cache.players(token)));
   }
 
@@ -85,18 +93,25 @@ export class CompanySync {
   }
   async addPlayer(token: string, name: string): Promise<Player> {
     const player = await this.gateway.createPlayer(token, name);
-    await this.enqueue(() => this.mutatePlayers(token, (current) =>
-      current.some((item) => item.id === player.id) ? current : [...current, player]));
+    await this.enqueue(() =>
+      this.mutatePlayers(token, (current) =>
+        current.some((item) => item.id === player.id) ? current : [...current, player],
+      ),
+    );
     return player;
   }
   async renamePlayer(token: string, playerId: string, name: string): Promise<Player> {
     const player = await this.gateway.renamePlayer(token, playerId, name);
-    await this.enqueue(() => this.mutatePlayers(token, (current) => current.map((item) => item.id === player.id ? player : item)));
+    await this.enqueue(() =>
+      this.mutatePlayers(token, (current) => current.map((item) => (item.id === player.id ? player : item))),
+    );
     return player;
   }
   async resetPlayerStatistics(token: string, playerId: string): Promise<Player> {
     const player = await this.gateway.resetPlayerStatistics(token, playerId);
-    await this.enqueue(() => this.mutatePlayers(token, (current) => current.map((item) => item.id === player.id ? player : item)));
+    await this.enqueue(() =>
+      this.mutatePlayers(token, (current) => current.map((item) => (item.id === player.id ? player : item))),
+    );
     return player;
   }
   async deletePlayer(token: string, playerId: string): Promise<void> {
@@ -119,7 +134,11 @@ export class CompanySync {
     if (this.syncing) return this.syncing;
     const running = this.enqueue(() => this.runSync(token, forceRetry));
     this.syncing = running;
-    try { await running; } finally { this.syncing = undefined; }
+    try {
+      await running;
+    } finally {
+      this.syncing = undefined;
+    }
   }
 
   private dueForUpload(item: SharedMatchCache, at: number): boolean {
@@ -137,7 +156,10 @@ export class CompanySync {
     } catch (cause) {
       if (isPermanentFailure(cause)) {
         // Неустранимый отказ (413, 400, 403…): бесконечные повторы ничего не изменят.
-        await this.cache.setState(token, item.match.id, 'rejected', { reason: failureReason(cause), failedAt: this.now() });
+        await this.cache.setState(token, item.match.id, 'rejected', {
+          reason: failureReason(cause),
+          failedAt: this.now(),
+        });
         return;
       }
       await this.cache.setState(token, item.match.id, 'error', {
@@ -151,9 +173,10 @@ export class CompanySync {
   private async runSync(token: string, forceRetry: boolean): Promise<void> {
     const at = Date.parse(this.now());
     const rows = this.cache.pendingMatches ? await this.cache.pendingMatches(token) : await this.cache.matches(token);
-    const pending = rows.filter((item) =>
-      this.dueForUpload(item, Number.isFinite(at) ? at : Date.now())
-      || (forceRetry && item.state === 'error'));
+    const pending = rows.filter(
+      (item) =>
+        this.dueForUpload(item, Number.isFinite(at) ? at : Date.now()) || (forceRetry && item.state === 'error'),
+    );
     const queue = [...pending];
     const worker = async (): Promise<void> => {
       for (let item = queue.shift(); item !== undefined; item = queue.shift()) await this.upload(token, item);

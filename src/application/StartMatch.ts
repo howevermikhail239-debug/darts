@@ -1,8 +1,8 @@
-import { createMatch, type MatchSetup } from "../domain/match/createMatch";
-import type { Match, PlayerId } from "../domain/match/models";
-import { GameSession, type Clock, type IdGenerator } from "./GameSession";
-import type { MatchRepository, PlayerRepository } from "./ports/repositories";
-import { domainError } from "../domain/errors";
+import { createMatch, type MatchSetup } from '../domain/match/createMatch';
+import type { Match, PlayerId } from '../domain/match/models';
+import { GameSession, type Clock, type IdGenerator } from './GameSession';
+import type { MatchRepository, PlayerRepository } from './ports/repositories';
+import { domainError } from '../domain/errors';
 
 export type MatchParticipantInput = Readonly<{
   name: string;
@@ -27,10 +27,9 @@ export async function startMatch(
   const savedPlayers = await dependencies.players.list();
   const savedById = new Map(savedPlayers.map((player) => [player.id, player]));
   const resolved = participants.map((participant) => {
-    if (!participant.playerId)
-      return { id: dependencies.id(), name: participant.name.trim() };
+    if (!participant.playerId) return { id: dependencies.id(), name: participant.name.trim() };
     const saved = savedById.get(participant.playerId);
-    if (!saved) throw domainError("profile_missing", "Сохранённый профиль игрока не найден");
+    if (!saved) throw domainError('profile_missing', 'Сохранённый профиль игрока не найден');
     return { id: saved.id, name: saved.name };
   });
   const now = dependencies.now();

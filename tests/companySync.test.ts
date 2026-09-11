@@ -1,18 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CompanySync } from '../src/application/CompanySync';
-import { HttpError, type CompanyGateway, type CompanySnapshot, type SharedCompany } from '../src/application/ports/companyGateway';
+import {
+  HttpError,
+  type CompanyGateway,
+  type CompanySnapshot,
+  type SharedCompany,
+} from '../src/application/ports/companyGateway';
 import type { SharedMatchState } from '../src/application/ports/repositories';
 import type { Match, Player } from '../src/domain/match/models';
 
 const company: SharedCompany = { token: 'company-token', name: 'Лига', createdAt: '2026-09-10T10:00:00.000Z' };
 const player: Player = { id: 'player-1', name: 'Миша', createdAt: '2026-09-10T10:00:00.000Z' };
 const match = (id: string): Match => ({
-  id, createdAt: '2026-09-10T10:00:00.000Z', completedAt: '2026-09-10T10:01:00.000Z', status: 'abandoned',
-  players: ['player-1', 'player-2'], startingPlayerIndex: 0, currentPlayerIndex: 0,
-  participantNames: { 'player-1': 'Миша', 'player-2': 'Илья' }, confirmedVisits: [],
-  state: { kind: 'x01', startingScore: 501, outRule: 'straight', format: { kind: 'unlimited' }, remaining: { 'player-1': 501, 'player-2': 501 }, visitsCompleted: { 'player-1': 0, 'player-2': 0 }, phase: { kind: 'regulation' } },
+  id,
+  createdAt: '2026-09-10T10:00:00.000Z',
+  completedAt: '2026-09-10T10:01:00.000Z',
+  status: 'abandoned',
+  players: ['player-1', 'player-2'],
+  startingPlayerIndex: 0,
+  currentPlayerIndex: 0,
+  participantNames: { 'player-1': 'Миша', 'player-2': 'Илья' },
+  confirmedVisits: [],
+  state: {
+    kind: 'x01',
+    startingScore: 501,
+    outRule: 'straight',
+    format: { kind: 'unlimited' },
+    remaining: { 'player-1': 501, 'player-2': 501 },
+    visitsCompleted: { 'player-1': 0, 'player-2': 0 },
+    phase: { kind: 'regulation' },
+  },
 });
-type CachedMatch = Readonly<{ token: string; match: Match; state: SharedMatchState; reason?: string; attempts?: number; failedAt?: string }>;
+type CachedMatch = Readonly<{
+  token: string;
+  match: Match;
+  state: SharedMatchState;
+  reason?: string;
+  attempts?: number;
+  failedAt?: string;
+}>;
 type Details = Readonly<{ reason?: string; attempts?: number; failedAt?: string }>;
 
 class MemoryCache {
@@ -22,23 +48,34 @@ class MemoryCache {
   merged: Match[] = [];
   forgotten: string[] = [];
   states: Array<{ matchId: string; state: SharedMatchState; details?: Details }> = [];
-  async saveCompany(value: SharedCompany) { this.savedCompanies.push(value); }
-  async players() { return this.savedPlayers; }
-  async savePlayers(token: string, values: readonly Player[]) { void token; this.savedPlayers = values; }
+  async saveCompany(value: SharedCompany) {
+    this.savedCompanies.push(value);
+  }
+  async players() {
+    return this.savedPlayers;
+  }
+  async savePlayers(token: string, values: readonly Player[]) {
+    void token;
+    this.savedPlayers = values;
+  }
   async updatePlayers(token: string, mutate: (current: readonly Player[]) => readonly Player[]) {
     void token;
     // Имитация транзакции: чтение и запись происходят атомарно относительно других мутаций.
     this.savedPlayers = mutate(this.savedPlayers);
     return this.savedPlayers;
   }
-  async matches() { return this.cachedMatches; }
+  async matches() {
+    return this.cachedMatches;
+  }
   async mergeRemote(token: string, values: readonly Match[]) {
     void token;
     this.merged.push(...values.filter((value) => !this.forgotten.includes(value.id)));
   }
   async setState(token: string, matchId: string, state: SharedMatchState, details?: Details) {
     this.states.push({ matchId, state, ...(details ? { details } : {}) });
-    this.cachedMatches = this.cachedMatches.map((item) => item.token === token && item.match.id === matchId ? { ...item, state, ...details } : item);
+    this.cachedMatches = this.cachedMatches.map((item) =>
+      item.token === token && item.match.id === matchId ? { ...item, state, ...details } : item,
+    );
   }
   async forgetMatch(token: string, matchId: string) {
     void token;
@@ -55,14 +92,34 @@ class FakeGateway implements CompanyGateway {
   peakInFlight = 0;
   uploadDelayMs = 0;
   rejectPermanently = new Set<string>();
-  constructor(private readonly snapshot: CompanySnapshot, readonly failingIds = new Set<string>()) {}
-  async createCompany() { return company; }
-  async loadCompany() { if (this.failLoad) throw new Error('offline'); return this.snapshot; }
-  async createPlayer(token: string, name: string) { void token; return { ...player, id: `id-${name}`, name }; }
-  async renamePlayer(token: string, playerId: string, name: string) { void token; return { ...player, id: playerId, name }; }
-  async resetPlayerStatistics(token: string, playerId: string) { void token; return { ...player, id: playerId, statsResetAt: '2026-09-11T12:00:00.000Z' }; }
+  constructor(
+    private readonly snapshot: CompanySnapshot,
+    readonly failingIds = new Set<string>(),
+  ) {}
+  async createCompany() {
+    return company;
+  }
+  async loadCompany() {
+    if (this.failLoad) throw new Error('offline');
+    return this.snapshot;
+  }
+  async createPlayer(token: string, name: string) {
+    void token;
+    return { ...player, id: `id-${name}`, name };
+  }
+  async renamePlayer(token: string, playerId: string, name: string) {
+    void token;
+    return { ...player, id: playerId, name };
+  }
+  async resetPlayerStatistics(token: string, playerId: string) {
+    void token;
+    return { ...player, id: playerId, statsResetAt: '2026-09-11T12:00:00.000Z' };
+  }
   async deletePlayer() {}
-  async deleteMatch(token: string, matchId: string) { void token; this.deleted.push(matchId); }
+  async deleteMatch(token: string, matchId: string) {
+    void token;
+    this.deleted.push(matchId);
+  }
   async uploadMatch(token: string, value: Match) {
     void token;
     this.inFlight += 1;
@@ -70,7 +127,8 @@ class FakeGateway implements CompanyGateway {
     try {
       if (this.uploadDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.uploadDelayMs));
       this.uploaded.push(value.id);
-      if (this.rejectPermanently.has(value.id)) throw new HttpError('Матч слишком большой для отправки в компанию.', 413);
+      if (this.rejectPermanently.has(value.id))
+        throw new HttpError('Матч слишком большой для отправки в компанию.', 413);
       if (this.failingIds.has(value.id)) throw new HttpError('Сервер компании временно недоступен (код 503).', 503);
     } finally {
       this.inFlight -= 1;
@@ -78,8 +136,11 @@ class FakeGateway implements CompanyGateway {
   }
 }
 
-const snapshot = (matches: readonly Match[] = [], players: readonly Player[] = [player]): CompanySnapshot =>
-  ({ company: { name: company.name, createdAt: company.createdAt }, players, matches });
+const snapshot = (matches: readonly Match[] = [], players: readonly Player[] = [player]): CompanySnapshot => ({
+  company: { name: company.name, createdAt: company.createdAt },
+  players,
+  matches,
+});
 
 describe('CompanySync', () => {
   it('uses its gateway to create, open, and add company data while caching the result', async () => {
@@ -110,8 +171,14 @@ describe('CompanySync', () => {
     await new CompanySync(cache, gateway, now).sync(company.token);
 
     expect(gateway.uploaded.sort()).toEqual(['failed', 'pending']);
-    expect(cache.states.map((item) => ({ matchId: item.matchId, state: item.state })).sort((a, b) => a.matchId.localeCompare(b.matchId)))
-      .toEqual([{ matchId: 'failed', state: 'error' }, { matchId: 'pending', state: 'synced' }]);
+    expect(
+      cache.states
+        .map((item) => ({ matchId: item.matchId, state: item.state }))
+        .sort((a, b) => a.matchId.localeCompare(b.matchId)),
+    ).toEqual([
+      { matchId: 'failed', state: 'error' },
+      { matchId: 'pending', state: 'synced' },
+    ]);
     expect(cache.savedPlayers).toEqual([player]);
     expect(cache.merged).toEqual([match('remote')]);
 
@@ -177,7 +244,11 @@ describe('CompanySync', () => {
 
   it('uploads in parallel and refuses to run two syncs at once', async () => {
     const cache = new MemoryCache();
-    cache.cachedMatches = Array.from({ length: 9 }, (_unused, index) => ({ token: company.token, match: match(`m${index}`), state: 'pending' as const }));
+    cache.cachedMatches = Array.from({ length: 9 }, (_unused, index) => ({
+      token: company.token,
+      match: match(`m${index}`),
+      state: 'pending' as const,
+    }));
     const gateway = new FakeGateway(snapshot());
     gateway.uploadDelayMs = 5;
     const sync = new CompanySync(cache, gateway);

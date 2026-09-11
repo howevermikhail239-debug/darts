@@ -1,3 +1,3 @@
-export * from "./types";
-export * from "./visitStatistics";
-export * from "./historyStatistics";
+export * from './types';
+export * from './visitStatistics';
+export * from './historyStatistics';

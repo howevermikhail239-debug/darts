@@ -15,12 +15,16 @@ export function UpdateBanner({ matchInProgress, onUpdate, onDismiss }: Props) {
         <b>Доступна новая версия</b>
         <span>
           {matchInProgress
-            ? "Идёт матч. Приложение перезагрузится: подтверждённые подходы сохранятся, но экран игры закроется, а отменить получится только последний подход."
-            : "Обновление применится после перезагрузки страницы."}
+            ? 'Идёт матч. Приложение перезагрузится: подтверждённые подходы сохранятся, но экран игры закроется, а отменить получится только последний подход.'
+            : 'Обновление применится после перезагрузки страницы.'}
         </span>
       </div>
-      <button className="secondary" onClick={onUpdate}>{matchInProgress ? "Обновить и перезагрузить" : "Обновить"}</button>
-      <button className="link-button" onClick={onDismiss}>Позже</button>
+      <button className="secondary" onClick={onUpdate}>
+        {matchInProgress ? 'Обновить и перезагрузить' : 'Обновить'}
+      </button>
+      <button className="link-button" onClick={onDismiss}>
+        Позже
+      </button>
     </aside>
   );
 }
