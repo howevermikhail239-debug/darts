@@ -1,0 +1,14 @@
+[Unit]
+Description=Back up Dart Scorekeeper JSON storage
+RequiresMountsFor=/var/lib/dart-scorekeeper
+
+[Service]
+Type=oneshot
+User=darts
+Group=darts
+ExecStart=/usr/local/sbin/dart-scorekeeper-backup
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dart-scorekeeper

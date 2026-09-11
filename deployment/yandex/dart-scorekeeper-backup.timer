@@ -1,0 +1,11 @@
+[Unit]
+Description=Create a bounded Dart Scorekeeper backup every six hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

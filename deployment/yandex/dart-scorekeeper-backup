@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+data_dir=/var/lib/dart-scorekeeper
+backup_dir="$data_dir/backups"
+source_file="$data_dir/dart-scorekeeper.json"
+
+install -d -m 0750 "$backup_dir"
+[[ -f "$source_file" ]] || exit 0
+
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+temporary_file="$(mktemp "$backup_dir/.dart-scorekeeper-$timestamp.XXXXXX.tmp")"
+backup_file="$backup_dir/dart-scorekeeper-$timestamp.json"
+trap 'rm -f "$temporary_file"' EXIT
+cp --preserve=mode,ownership,timestamps "$source_file" "$temporary_file"
+mv "$temporary_file" "$backup_file"
+trap - EXIT
+
+find "$backup_dir" -maxdepth 1 -type f -name 'dart-scorekeeper-*.json' -printf '%T@ %p\n' \
+  | sort -rn \
+  | tail -n +26 \
+  | cut -d' ' -f2- \
+  | xargs -r rm --

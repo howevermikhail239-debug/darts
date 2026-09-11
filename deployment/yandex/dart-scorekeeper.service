@@ -1,0 +1,28 @@
+[Unit]
+Description=Dart Scorekeeper production server
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/lib/dart-scorekeeper
+
+[Service]
+Type=simple
+User=darts
+Group=darts
+WorkingDirectory=/opt/dart-scorekeeper/current
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=3000
+Environment=DATA_DIR=/var/lib/dart-scorekeeper
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=60
+StartLimitBurst=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dart-scorekeeper
+
+[Install]
+WantedBy=multi-user.target

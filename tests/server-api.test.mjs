@@ -1,14 +1,14 @@
 /* global process, fetch */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
-const start = async (file) => {
+const start = async (file, env = {}) => {
   const port = 44000 + Math.floor(Math.random() * 1000);
-  const child = spawn(process.execPath, ['server.mjs'], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), DARTS_DATA_FILE: file }, stdio: 'pipe' });
+  const child = spawn(process.execPath, ['server.mjs'], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), ...(file ? { DARTS_DATA_FILE: file } : {}), ...env }, stdio: 'pipe' });
   await new Promise((resolve, reject) => { child.stdout.on('data', data => data.toString().includes('Dart Scorekeeper') && resolve()); child.once('error', reject); child.once('exit', code => reject(new Error(`server exited: ${code}`))); });
   return { child, url: `http://127.0.0.1:${port}` };
 };
@@ -47,4 +47,44 @@ test('companies isolate data, preserve stable players and idempotent immutable m
     await stop(server.child); server = await start(file);
     const restored = await json(`${server.url}/api/groups/${a.body.token}`); assert.equal(restored.body.players[0].id, player.body.player.id); assert.equal(restored.body.matches.length, 13);
   } finally { if (server) await stop(server.child); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('DATA_DIR selects a writable storage directory and health reports readiness', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'darts-data-dir-')); let server;
+  try {
+    server = await start(undefined, { DATA_DIR: dir, DARTS_DATA_FILE: '' });
+    const health = await json(`${server.url}/healthz`);
+    assert.deepEqual(health, { status: 200, body: { status: 'ok' } });
+    assert.equal((await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Production' }) })).status, 201);
+    const stored = JSON.parse(await readFile(join(dir, 'dart-scorekeeper.json'), 'utf8'));
+    assert.equal(Object.keys(stored.groups).length, 1);
+  } finally { if (server) await stop(server.child); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('health reports unavailable without replacing corrupt storage', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'darts-corrupt-')); const file = join(dir, 'dart-scorekeeper.json'); let server;
+  try {
+    await writeFile(file, '{corrupt', 'utf8');
+    server = await start(file);
+    assert.deepEqual(await json(`${server.url}/healthz`), { status: 503, body: { status: 'unavailable' } });
+    assert.equal((await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 503);
+    assert.equal(await readFile(file, 'utf8'), '{corrupt');
+  } finally { if (server) await stop(server.child); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('runtime persistence failure returns 503 without committing phantom state', async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), 'darts-runtime-failure-')); const dataDir = join(rootDir, 'data'); const file = join(dataDir, 'store.json'); const durableCopy = join(rootDir, 'durable.json'); let server;
+  try {
+    server = await start(file);
+    const created = await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Durable' }) });
+    assert.equal(created.status, 201);
+    await rename(file, durableCopy);
+    await rm(dataDir, { recursive: true });
+    await writeFile(dataDir, 'blocks-directory-creation', 'utf8');
+    const failed = await json(`${server.url}/api/groups/${created.body.token}/players`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Not persisted' }) });
+    assert.deepEqual(failed, { status: 503, body: { error: 'unavailable' } });
+    assert.deepEqual(await json(`${server.url}/healthz`), { status: 503, body: { status: 'unavailable' } });
+    const durable = JSON.parse(await readFile(durableCopy, 'utf8'));
+    assert.equal(Object.values(durable.groups)[0].players && Object.keys(Object.values(durable.groups)[0].players).length, 0);
+  } finally { if (server) await stop(server.child); await rm(rootDir, { recursive: true, force: true }); }
 });
