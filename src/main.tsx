@@ -10,7 +10,7 @@ const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
     announceAppUpdate(() => {
-      void updateSW(true);
+      updateSW(true).catch((cause: unknown) => console.error('Не удалось обновить приложение:', cause));
     });
   },
 });

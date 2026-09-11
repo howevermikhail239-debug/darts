@@ -190,7 +190,7 @@ export function SetupPage({
           </div>
         </div>
         <StarterSelector participants={participants} starter={starter} onStarter={setStarter} />
-        <button className="primary start" onClick={() => void start()} disabled={busy || !valid}>
+        <button className="primary start" onClick={() => start().catch(() => undefined)} disabled={busy || !valid}>
           {busy ? 'Создаём…' : t.start}
         </button>
         {startError ? (
@@ -338,7 +338,7 @@ function CompanyContextPanel({
           </span>
         ) : null}
         {syncNote ? (
-          <button className="link-button" onClick={() => void onRetry?.().catch(() => undefined)}>
+          <button className="link-button" onClick={() => onRetry?.().catch(() => undefined)}>
             Повторить
           </button>
         ) : null}
@@ -388,7 +388,11 @@ function CompanyContextPanel({
         </div>
       </div>
       {creatingCompany ? (
-        <form className="company-create-form" onSubmit={(event) => void createCompany(event)} aria-busy={createBusy}>
+        <form
+          className="company-create-form"
+          onSubmit={(event) => createCompany(event).catch(() => undefined)}
+          aria-busy={createBusy}
+        >
           <p className="company-guidance">
             Создайте общее пространство для игроков, матчей и статистики. После создания здесь появятся название,
             приглашение и следующий шаг.
@@ -587,7 +591,11 @@ function ParticipantRow({
         </button>
       ) : null}
       {creating ? (
-        <form className="slot-profile-form" onSubmit={(event) => void createAndSelect(event)} aria-busy={busy}>
+        <form
+          className="slot-profile-form"
+          onSubmit={(event) => createAndSelect(event).catch(() => undefined)}
+          aria-busy={busy}
+        >
           <label>
             Имя профиля
             <input

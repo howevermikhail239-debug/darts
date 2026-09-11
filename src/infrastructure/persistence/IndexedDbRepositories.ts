@@ -119,7 +119,7 @@ function upgrade(
   }
   if (!database.objectStoreNames.contains('deletedMatches'))
     database.createObjectStore('deletedMatches', { keyPath: ['token', 'matchId'] });
-  if (oldVersion > 0 && oldVersion < 2) void migrateMetaRows(transaction);
+  if (oldVersion > 0 && oldVersion < 2) migrateMetaRows(transaction).catch(() => transaction.abort());
 }
 
 let database: Promise<IDBPDatabase<DartsDb>> | undefined;

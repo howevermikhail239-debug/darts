@@ -17,14 +17,14 @@ export function useWakeLock(active: boolean): void {
       }
     };
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void request();
+      if (document.visibilityState === 'visible') request().catch(() => undefined);
     };
-    void request();
+    request().catch(() => undefined);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVisible);
-      void sentinel?.release().catch(() => undefined);
+      sentinel?.release().catch(() => undefined);
     };
   }, [active]);
 }

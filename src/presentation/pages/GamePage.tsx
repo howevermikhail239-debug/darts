@@ -91,7 +91,7 @@ export function GamePage({
           destructive: true,
           action: () => {
             setDialog(undefined);
-            void undoConfirmed(true);
+            undoConfirmed(true).catch(() => undefined);
           },
         });
         return;
@@ -298,7 +298,7 @@ export function GamePage({
               setError(userMessage(e));
             });
         }}
-        onConfirm={() => void confirm()}
+        onConfirm={() => confirm().catch(() => undefined)}
       />
       {view.checkoutHint ? (
         <div className="checkout" role="status">
@@ -341,8 +341,10 @@ export function GamePage({
             snapshot.isConfirming || snapshot.isPersistingDraft || (!view.canAddNextDart && selected === undefined)
           }
           onMultiplier={setMultiplier}
-          onNumber={(n) => void enter(numberThrow(n, multiplier))}
-          onBull={(kind) => void enter(kind === 'outer' ? outerBull() : kind === 'bull' ? bull() : miss())}
+          onNumber={(n) => enter(numberThrow(n, multiplier)).catch(() => undefined)}
+          onBull={(kind) =>
+            enter(kind === 'outer' ? outerBull() : kind === 'bull' ? bull() : miss()).catch(() => undefined)
+          }
         />
       ) : null}{' '}
       {error ? (
@@ -350,7 +352,12 @@ export function GamePage({
           {error}
         </div>
       ) : null}
-      <button className="undo-link" aria-label={t.undo} onClick={() => void undo()} disabled={!undoVisit}>
+      <button
+        className="undo-link"
+        aria-label={t.undo}
+        onClick={() => undo().catch(() => undefined)}
+        disabled={!undoVisit}
+      >
         {undoVisit
           ? `Отменить: ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} · ${undoVisit.awardedScore}`
           : t.undo}
@@ -505,21 +512,21 @@ function Summary({
         </section>
       ) : null}
       <section className="summary-actions">
-        <button className="primary" disabled={busy} onClick={() => void run(onRematch)}>
+        <button className="primary" disabled={busy} onClick={() => run(onRematch).catch(() => undefined)}>
           Сыграть ещё раз
         </button>
         {persistentPlayers.length > 0 ? (
-          <button className="secondary" disabled={busy} onClick={() => void run(onStatistics)}>
+          <button className="secondary" disabled={busy} onClick={() => run(onStatistics).catch(() => undefined)}>
             Статистика
           </button>
         ) : null}
-        <button className="secondary share-result" disabled={busy} onClick={() => void share()}>
+        <button className="secondary share-result" disabled={busy} onClick={() => share().catch(() => undefined)}>
           Поделиться
         </button>
-        <button className="secondary" disabled={busy} onClick={() => void run(onFinish)}>
+        <button className="secondary" disabled={busy} onClick={() => run(onFinish).catch(() => undefined)}>
           На главную
         </button>
-        <button className="secondary" disabled={busy} onClick={() => void run(onUndo)}>
+        <button className="secondary" disabled={busy} onClick={() => run(onUndo).catch(() => undefined)}>
           {t.undo}
         </button>
       </section>

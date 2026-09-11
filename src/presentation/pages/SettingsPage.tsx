@@ -164,7 +164,7 @@ export function SettingsPage({
       <section className="setup-form">
         <h2>Данные</h2>
         <p>Сохраните игроков, историю и незавершённую игру в один файл.</p>
-        <button className="primary" disabled={busy} onClick={() => void download()}>
+        <button className="primary" disabled={busy} onClick={() => download().catch(() => undefined)}>
           Экспортировать данные
         </button>
         <button className="secondary" disabled={busy} onClick={() => file.current?.click()}>
@@ -200,7 +200,7 @@ export function SettingsPage({
         onConfirm={() => {
           const selected = restoreFile;
           setRestoreFile(undefined);
-          if (selected) void restore(selected);
+          if (selected) restore(selected).catch(() => undefined);
         }}
       />
       <Dialog

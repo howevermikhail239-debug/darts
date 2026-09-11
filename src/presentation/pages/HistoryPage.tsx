@@ -266,7 +266,11 @@ function HistoryDetail({
       ))}
       {match.status === 'completed' ? (
         <div className="history-actions">
-          <button className="secondary history-rematch" disabled={busy} onClick={() => void onRematch(match)}>
+          <button
+            className="secondary history-rematch"
+            disabled={busy}
+            onClick={() => onRematch(match).catch(() => undefined)}
+          >
             Сыграть ещё раз
           </button>
           <button className="danger-button" disabled={busy} onClick={onDelete}>

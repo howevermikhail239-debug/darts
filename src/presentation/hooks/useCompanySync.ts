@@ -144,7 +144,7 @@ export function useCompanySync({ sync, cache }: Dependencies) {
         setCompany(opened);
         if (!known) setCatalogRevision((value) => value + 1);
         await applyCache(token, expectedGeneration);
-        if (active && generation.current === expectedGeneration) void syncAfterMatch();
+        if (active && generation.current === expectedGeneration) syncAfterMatch().catch(() => undefined);
       } catch (cause) {
         if (!active || generation.current !== expectedGeneration) return;
         if (known) setNote(offlineNote);
@@ -167,7 +167,7 @@ export function useCompanySync({ sync, cache }: Dependencies) {
   useEffect(() => {
     if (!company) return;
     const handleOnline = () => {
-      void retry();
+      retry().catch(() => undefined);
     };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);

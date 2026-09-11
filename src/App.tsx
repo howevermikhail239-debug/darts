@@ -276,7 +276,10 @@ export default function App() {
           <button className="secondary" onClick={() => location.reload()}>
             Обновить страницу
           </button>
-          <button className="secondary" onClick={() => void saveRawDump()}>
+          <button
+            className="secondary"
+            onClick={() => saveRawDump().catch((cause) => setWipeError(userMessage(cause)))}
+          >
             Выгрузить данные в файл
           </button>
           <button
