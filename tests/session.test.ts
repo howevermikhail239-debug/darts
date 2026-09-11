@@ -225,11 +225,11 @@ describe("GameSession", () => {
     const session = new GameSession(match, repo, id, clock);
     repo.defer = true;
     const first = session.record(numberThrow(20, 3));
-    expect(session.snapshot()).toMatchObject({ draft: { darts: [] }, isConfirming: true });
-    await expect(session.record(numberThrow(19, 3))).rejects.toThrow("Подтверждение уже выполняется");
+    expect(session.snapshot()).toMatchObject({ draft: { darts: [] }, isConfirming: false, isPersistingDraft: true });
+    await expect(session.record(numberThrow(19, 3))).rejects.toThrow("Идёт сохранение подхода");
     repo.release?.();
     await first;
-    expect(session.snapshot()).toMatchObject({ draft: { darts: [numberThrow(20, 3)] }, isConfirming: false });
+    expect(session.snapshot()).toMatchObject({ draft: { darts: [numberThrow(20, 3)] }, isConfirming: false, isPersistingDraft: false });
     expect(repo.active?.draft.draft.darts).toEqual([numberThrow(20, 3)]);
     expect(repo.saveCalls).toBe(1);
   });

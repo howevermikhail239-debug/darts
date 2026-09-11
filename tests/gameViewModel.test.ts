@@ -47,7 +47,7 @@ const fixed = (): Match => ({
 });
 const snapshot = (match: Match): SessionSnapshot => {
   const draft = emptyDraft();
-  return { match, draft, evaluation: rulesFor(match).evaluateDraft(draft, match), isConfirming: false };
+  return { match, draft, evaluation: rulesFor(match).evaluateDraft(draft, match), isConfirming: false, isPersistingDraft: false };
 };
 
 describe("GameViewModel", () => {
@@ -63,7 +63,7 @@ describe("GameViewModel", () => {
   it("formats confirm labels from the authoritative draft evaluation", () => {
     const match = x01();
     const draft = { darts: [numberThrow(20, 3), numberThrow(20, 2), numberThrow(5, 1)] } as const;
-    const ready: SessionSnapshot = { match, draft, evaluation: rulesFor(match).evaluateDraft(draft, match), isConfirming: false };
+    const ready: SessionSnapshot = { match, draft, evaluation: rulesFor(match).evaluateDraft(draft, match), isConfirming: false, isPersistingDraft: false };
     expect(toGameViewModel(ready, players).confirmLabel).toBe("Подтвердить 105");
     expect(toGameViewModel({ ...ready, isConfirming: true }, players).confirmLabel).toBe("Сохраняем…");
   });

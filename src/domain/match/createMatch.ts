@@ -1,4 +1,5 @@
 import { MAX_PLAYERS, MIN_PLAYERS, type Match, type PlayerId } from "./models";
+import { domainError } from "../errors";
 
 export type MatchSetup =
   | Readonly<{
@@ -26,15 +27,15 @@ export function createMatch(
   ),
 ): Match {
   if (playerIds.length < MIN_PLAYERS || new Set(playerIds).size !== playerIds.length)
-    throw new Error(`Матчу нужны как минимум ${MIN_PLAYERS} разных игрока`);
+    throw domainError("player_limits", `Матчу нужны как минимум ${MIN_PLAYERS} разных игрока`);
   if (playerIds.length > MAX_PLAYERS)
-    throw new Error(`В матче не может быть больше ${MAX_PLAYERS} игроков`);
+    throw domainError("player_limits", `В матче не может быть больше ${MAX_PLAYERS} игроков`);
   if (
     !Number.isInteger(setup.startingPlayerIndex) ||
     setup.startingPlayerIndex < 0 ||
     setup.startingPlayerIndex >= playerIds.length
   )
-    throw new Error("Некорректный начинающий");
+    throw domainError("invalid_player_index", "Некорректный начинающий");
   if (setup.mode === "x01") {
     if (
       setup.format.kind === "limited" &&
@@ -42,7 +43,7 @@ export function createMatch(
         setup.format.visitsPerPlayer < 1 ||
         setup.format.visitsPerPlayer > 999)
     )
-      throw new Error("Количество подходов должно быть от 1 до 999");
+      throw domainError("visits_range", "Количество подходов должно быть от 1 до 999");
     const startingScore = setup.startingScore ?? 501;
     const state: Match["state"] = {
       kind: "x01",
@@ -70,7 +71,7 @@ export function createMatch(
     setup.visitsPerPlayer < 1 ||
     setup.visitsPerPlayer > 999
   )
-    throw new Error("Количество подходов должно быть от 1 до 999");
+    throw domainError("visits_range", "Количество подходов должно быть от 1 до 999");
   const state: Match["state"] = {
     kind: "fixed_visits",
     visitsPerPlayer: setup.visitsPerPlayer,

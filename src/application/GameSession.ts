@@ -9,21 +9,13 @@ import {
   draftIsEmpty,
   isDetailedDraft,
   type VisitDraft,
-} from "../domain/match/VisitDraft";
-import {
-  currentPlayerId,
-  visitContext,
-  type Match,
-  type Visit,
-} from "../domain/match/models";
-import type { DartThrow } from "../domain/darts/DartThrow";
-import type { DraftEvaluation } from "../domain/rules/GameRules";
-import { rulesFor } from "../domain/rules/rulesFor";
-import type {
-  ActiveMatchRecord,
-  ActiveVisitDraft,
-  MatchRepository,
-} from "./ports/repositories";
+} from '../domain/match/VisitDraft';
+import { currentPlayerId, visitContext, type Match, type Visit } from '../domain/match/models';
+import type { DartThrow } from '../domain/darts/DartThrow';
+import type { DraftEvaluation } from '../domain/rules/GameRules';
+import { domainError } from '../domain/errors';
+import { rulesFor } from '../domain/rules/rulesFor';
+import type { ActiveMatchRecord, ActiveVisitDraft, MatchRepository } from './ports/repositories';
 
 export type IdGenerator = () => string;
 export type Clock = () => string;
@@ -32,6 +24,7 @@ export type SessionSnapshot = Readonly<{
   draft: VisitDraft;
   evaluation: DraftEvaluation;
   isConfirming: boolean;
+  isPersistingDraft: boolean;
   notice?: string;
   undoVisit?: Visit;
 }>;
@@ -40,6 +33,7 @@ export class GameSession {
   private draft: VisitDraft = emptyDraft();
   private checkpoints: Match[] = [];
   private confirming = false;
+  private persistingDraft = false;
   private notice: string | undefined;
   constructor(
     private match: Match,
@@ -48,17 +42,17 @@ export class GameSession {
     private readonly now: Clock,
     previous?: Match,
     restoredDraft?: ActiveVisitDraft,
-    draftRecovery?: ActiveMatchRecord["draftRecovery"],
+    draftRecovery?: ActiveMatchRecord['draftRecovery'],
     private readonly companyToken?: string,
   ) {
     if (previous) this.checkpoints.push(previous);
     if (restoredDraft) {
       if (restoredDraft.playerId !== currentPlayerId(match))
-        throw new Error("Сохранённый подход не соответствует текущему игроку");
+        throw new Error('Сохранённый подход не соответствует текущему игроку');
       this.draft = restoredDraft.draft;
     }
-    if (draftRecovery === "discarded_corrupt")
-      this.notice = "Повреждённый незавершённый подход сброшен. Сам матч восстановлен.";
+    if (draftRecovery === 'discarded_corrupt')
+      this.notice = 'Повреждённый незавершённый подход сброшен. Сам матч восстановлен.';
   }
   snapshot(): SessionSnapshot {
     const value = {
@@ -66,6 +60,7 @@ export class GameSession {
       draft: this.draft,
       evaluation: rulesFor(this.match).evaluateDraft(this.draft, this.match),
       isConfirming: this.confirming,
+      isPersistingDraft: this.persistingDraft,
     };
     const undoVisit = this.match.confirmedVisits.at(-1);
     const withUndo = this.checkpoints.length && undoVisit ? { ...value, undoVisit } : value;
@@ -75,9 +70,7 @@ export class GameSession {
     this.ensureMutable();
     this.ensureInput();
     const changed =
-      replaceIndex === undefined
-        ? addDraftThrow(this.draft, dart)
-        : replaceDraftThrow(this.draft, replaceIndex, dart);
+      replaceIndex === undefined ? addDraftThrow(this.draft, dart) : replaceDraftThrow(this.draft, replaceIndex, dart);
     const { draft, notice } = this.normalize(changed);
     return this.persistDraft(draft, notice);
   }
@@ -105,7 +98,7 @@ export class GameSession {
     return isDetailedDraft(draft) && evaluation.validDartCount < draft.darts.length
       ? {
           draft: truncateDraft(draft, evaluation.validDartCount),
-          notice: "Поздние дротики удалены: подход завершился раньше."
+          notice: 'Поздние дротики удалены: подход завершился раньше.',
         }
       : { draft };
   }
@@ -122,39 +115,38 @@ export class GameSession {
     return previous ? { ...base, previous } : base;
   }
   private async persistDraft(draft: VisitDraft, notice?: string): Promise<SessionSnapshot> {
-    this.confirming = true;
+    if (this.persistingDraft) throw domainError('busy_persisting', 'Идёт сохранение подхода');
+    this.persistingDraft = true;
     try {
       await this.repository.saveActive(this.activeRecord(this.match, draft));
       this.draft = draft;
       this.notice = notice;
     } finally {
-      this.confirming = false;
+      this.persistingDraft = false;
     }
     return this.snapshot();
   }
   private ensureInput(): void {
-    if (this.match.status !== "in_progress") throw new Error("Матч завершён");
+    if (this.match.status !== 'in_progress') throw domainError('match_finished', 'Матч завершён');
     if (
-      (this.match.state.kind === "fixed_visits" &&
-        this.match.state.phase.kind === "awaiting_tie_decision") ||
-      (this.match.state.kind === "x01" &&
-        this.match.state.phase.kind === "awaiting_tie_break")
+      (this.match.state.kind === 'fixed_visits' && this.match.state.phase.kind === 'awaiting_tie_decision') ||
+      (this.match.state.kind === 'x01' && this.match.state.phase.kind === 'awaiting_tie_break')
     )
-      throw new Error("Сначала выберите результат ничьей");
+      throw domainError('draw_not_pending', 'Сначала выберите результат ничьей');
   }
   private ensureMutable(): void {
-    if (this.confirming) throw new Error("Подтверждение уже выполняется");
+    if (this.confirming) throw domainError('busy_confirming', 'Подтверждение уже выполняется');
+    if (this.persistingDraft) throw domainError('busy_persisting', 'Идёт сохранение подхода');
   }
   async confirm(): Promise<SessionSnapshot> {
     if (this.confirming) return this.snapshot();
     this.ensureInput();
     const rules = rulesFor(this.match);
     const evaluation = rules.evaluateDraft(this.draft, this.match);
-    if (evaluation.status === "in_progress" || evaluation.status === 'invalid')
+    if (evaluation.status === 'in_progress' || evaluation.status === 'invalid')
       throw new Error(
-        evaluation.reason ?? (this.match.state.kind === "fixed_visits"
-          ? "Введите ровно три дротика"
-          : "Введите дротик"),
+        evaluation.reason ??
+          (this.match.state.kind === 'fixed_visits' ? 'Введите ровно три дротика' : 'Введите дротик'),
       );
     this.confirming = true;
     try {
@@ -163,11 +155,7 @@ export class GameSession {
       const before = visitContext(previous);
       const playerId = currentPlayerId(previous);
       const provisionalResult =
-        evaluation.status === "bust"
-          ? "bust"
-          : evaluation.status === "match_won"
-              ? "match_won"
-              : "scored";
+        evaluation.status === 'bust' ? 'bust' : evaluation.status === 'match_won' ? 'match_won' : 'scored';
       const common = {
         id: this.id(),
         matchId: previous.id,
@@ -197,9 +185,7 @@ export class GameSession {
         confirmedVisits: [...applied.confirmedVisits.slice(0, -1), visit],
       };
       const nextDraft = resetDraft(isDetailedDraft(this.draft) ? 'detailed' : 'aggregate');
-      await this.repository.saveActive(
-        this.activeRecord(next, nextDraft, previous),
-      );
+      await this.repository.saveActive(this.activeRecord(next, nextDraft, previous));
       this.pushCheckpoint(previous);
       this.match = next;
       this.draft = nextDraft;
@@ -212,17 +198,15 @@ export class GameSession {
   async undo(discardDraft = false): Promise<SessionSnapshot> {
     this.ensureMutable();
     if (!draftIsEmpty(this.draft) && !discardDraft)
-      throw new Error("Сначала сбросьте незавершённый подход");
+      throw domainError('draft_not_reset', 'Сначала сбросьте незавершённый подход');
     const previous = this.checkpoints.at(-1);
-    if (!previous) throw new Error("Нет подхода для отмены");
+    if (!previous) throw domainError('nothing_to_undo', 'Нет подхода для отмены');
     const fallback = this.checkpoints.at(-2);
-    await this.repository.saveActive(
-      this.activeRecord(previous, emptyDraft(), fallback),
-    );
+    await this.repository.saveActive(this.activeRecord(previous, emptyDraft(), fallback));
     this.checkpoints.pop();
     this.match = previous;
     this.draft = emptyDraft();
-    this.notice = "Предыдущий подход отменён.";
+    this.notice = 'Предыдущий подход отменён.';
     return this.snapshot();
   }
   private pushCheckpoint(previous: Match): void {
@@ -252,11 +236,11 @@ export class GameSession {
   async abandon(): Promise<Match> {
     this.ensureMutable();
     // Abandoning a match that already has a result would erase that result: archive it as it is.
-    if (this.match.status === "completed") return this.finalize();
-    if (this.match.status === "abandoned") return this.match;
+    if (this.match.status === 'completed') return this.finalize();
+    if (this.match.status === 'abandoned') return this.match;
     const next: Match = {
       ...this.match,
-      status: "abandoned",
+      status: 'abandoned',
       completedAt: this.now(),
     };
     await this.repository.archiveAndClearActive(next);
@@ -265,8 +249,7 @@ export class GameSession {
   }
   async finalize(): Promise<Match> {
     this.ensureMutable();
-    if (this.match.status !== "completed")
-      throw new Error("Матч ещё не завершён");
+    if (this.match.status !== 'completed') throw new Error('Матч ещё не завершён');
     await this.repository.archiveAndClearActive(this.match);
     this.checkpoints = [];
     return this.match;

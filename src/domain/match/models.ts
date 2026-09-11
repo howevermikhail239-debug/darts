@@ -1,4 +1,5 @@
 import type { DartThrow } from '../darts/DartThrow';
+import { domainError } from '../errors';
 
 export type PlayerId = string;
 export type MatchId = string;
@@ -77,7 +78,7 @@ export const participantName = (match: Match, playerId: PlayerId): string =>
 export const scoresOf = (match: Match): Readonly<Record<PlayerId, number>> => match.state.kind === 'x01' ? match.state.remaining : match.state.totals;
 export const currentPlayerId = (match: Match): PlayerId => {
   const id = match.players[match.currentPlayerIndex];
-  if (!id) throw new Error('Некорректный индекс игрока');
+  if (!id) throw domainError('invalid_player_index', 'Некорректный индекс игрока');
   return id;
 };
 export const visitContext = (match: Match): VisitContext => {

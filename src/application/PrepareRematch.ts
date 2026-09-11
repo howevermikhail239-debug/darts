@@ -1,5 +1,6 @@
 import type { MatchSetup } from "../domain/match/createMatch";
 import type { Match, Player } from "../domain/match/models";
+import { domainError } from "../domain/errors";
 import type { MatchParticipantInput } from "./StartMatch";
 
 export type RematchRequest = Readonly<{
@@ -26,7 +27,8 @@ export function setupFromMatch(match: Match): MatchSetup {
 }
 
 export function prepareRematch(match: Match, persistentPlayers: readonly Player[]): RematchRequest {
-  if (match.status !== "completed") throw new Error("Повторить можно только завершённый матч");
+  if (match.status !== "completed")
+    throw domainError("rematch_requires_completed", "Повторить можно только завершённый матч");
   const persistentIds = new Set(persistentPlayers.map((player) => player.id));
   return {
     participants: match.players.map((playerId) => ({

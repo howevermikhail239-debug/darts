@@ -244,7 +244,7 @@ export function GamePage({
       ) : (
         isDetailedDraft(snapshot.draft)?<DartPad
           multiplier={multiplier}
-          disabled={snapshot.isConfirming || (!view.canAddNextDart && selected === undefined)}
+          disabled={snapshot.isConfirming || snapshot.isPersistingDraft || (!view.canAddNextDart && selected === undefined)}
           onMultiplier={setMultiplier}
           onNumber={(n) => void enter(numberThrow(n, multiplier))}
           onBull={(kind) =>
