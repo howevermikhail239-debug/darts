@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
+import { isActiveMatchConflict } from "../src/application/ports/repositories";
 import {
   ActiveMatchConflictError,
   IndexedDbMatchRepository,
@@ -222,7 +223,10 @@ describe("IndexedDB repository", () => {
     const advanced = { ...match, currentPlayerIndex: 1 };
     await tabB.saveActive({ current: advanced, draft: { playerId: "b", draft: emptyDraft() } });
 
-    await expect(tabA.saveActive({ current: match, draft })).rejects.toBeInstanceOf(ActiveMatchConflictError);
+    const conflict = await tabA.saveActive({ current: match, draft }).then(() => undefined, (error: unknown) => error);
+    expect(conflict).toBeInstanceOf(ActiveMatchConflictError);
+    // Презентационный слой распознаёт конфликт через порт, не импортируя инфраструктуру.
+    expect(isActiveMatchConflict(conflict)).toBe(true);
     expect((await tabB.loadActive())?.current.currentPlayerIndex).toBe(1);
   });
   it("recovers after a reload once the conflicting tab's state is re-read", async () => {
@@ -275,6 +279,18 @@ describe("IndexedDB repository", () => {
     await shared.mergeRemote("token-b", [other]);
     expect((await shared.matches("token-a")).map((item) => item.matchId)).toEqual(["mine"]);
     expect((await shared.matches("token-b")).map((item) => item.matchId)).toEqual(["other"]);
+  });
+  it("reads the upload queue by index without loading synced history", async () => {
+    const shared = new IndexedDbSharedRepository();
+    const token = "queue";
+    await shared.mergeRemote(token, [finished(x01("synced")), finished(x01("pending")), finished(x01("rejected"))]);
+    await shared.setState(token, "pending", "pending");
+    await shared.setState(token, "rejected", "rejected", { reason: "Матч слишком большой" });
+    expect((await shared.pendingMatches(token)).map((item) => item.matchId)).toEqual(["pending"]);
+
+    await shared.setState(token, "pending", "error", { attempts: 2, failedAt: "2026-09-11T12:00:00.000Z" });
+    expect(await shared.pendingMatches(token)).toMatchObject([{ matchId: "pending", state: "error", attempts: 2 }]);
+    expect((await shared.matches(token)).find((item) => item.matchId === "rejected")?.reason).toBe("Матч слишком большой");
   });
   it("applies concurrent player mutations inside one transaction without losing writes", async () => {
     const shared = new IndexedDbSharedRepository();

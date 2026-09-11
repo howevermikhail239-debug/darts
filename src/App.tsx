@@ -115,6 +115,12 @@ export default function App() {
     return () => { alive = false; };
   }, [confirmWipe]);
 
+  const resumeSnapshot = match.resume?.snapshot;
+  const resumeView = useMemo(
+    () => resumeSnapshot ? toGameViewModel(resumeSnapshot, playersForMatches(data.players, [resumeSnapshot.match])) : undefined,
+    [data.players, resumeSnapshot],
+  );
+
   const saveRawDump = useCallback(async () => {
     setDumpNote("Собираем всё, что читается…");
     try {
@@ -168,16 +174,15 @@ export default function App() {
     );
   }
   if (screen === "history") {
-    return <Suspense fallback={screenFallback}><HistoryPage matches={data.history} players={playersForMatches(data.players, data.history)} persistentPlayerIds={persistentIds} onBack={showHome} onDelete={data.deleteMatch} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, data.players); } catch (cause) { setActionError(userMessage(cause, "Не удалось начать новый матч.")); showHome(); } }} /></Suspense>;
+    return <>{updateBanner}<Suspense fallback={screenFallback}><HistoryPage matches={data.history} players={playersForMatches(data.players, data.history)} persistentPlayerIds={persistentIds} onBack={showHome} onDelete={data.deleteMatch} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, data.players); } catch (cause) { setActionError(userMessage(cause, "Не удалось начать новый матч.")); showHome(); } }} /></Suspense></>;
   }
   if (screen === "statistics") {
-    return <Suspense fallback={screenFallback}><StatisticsPage matches={data.history} players={data.players} initialPlayerIds={statisticsContext} onBack={showHome} /></Suspense>;
+    return <>{updateBanner}<Suspense fallback={screenFallback}><StatisticsPage matches={data.history} players={data.players} initialPlayerIds={statisticsContext} onBack={showHome} /></Suspense></>;
   }
   if (screen === "settings") {
-    return <SettingsPage players={data.players} onRename={data.renamePlayer} onResetStatistics={data.resetPlayerStatistics} onDeletePlayer={deleteProfile} onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} hapticsSupported={typeof navigator.vibrate === "function"} hapticsEnabled={preferences.hapticsEnabled} onHaptics={preferences.setHapticsEnabled} />;
+    return <>{updateBanner}<SettingsPage players={data.players} onRename={data.renamePlayer} onResetStatistics={data.resetPlayerStatistics} onDeletePlayer={deleteProfile} onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} hapticsSupported={typeof navigator.vibrate === "function"} hapticsEnabled={preferences.hapticsEnabled} onHaptics={preferences.setHapticsEnabled} /></>;
   }
 
-  const resumeView = match.resume ? toGameViewModel(match.resume.snapshot, playersForMatches(data.players, [match.resume.snapshot.match])) : undefined;
   return (
     <>
       {updateBanner}

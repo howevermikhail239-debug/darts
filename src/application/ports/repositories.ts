@@ -30,11 +30,20 @@ export interface MatchRepository {
   archiveAndClearActive(match: Match): Promise<void>;
   listHistory(): Promise<readonly Match[]>;
   deleteHistory?(matchId: string): Promise<boolean>;
+  /** История с числом пропущенных повреждённых записей (для сообщения в интерфейсе). */
+  readHistory?(limit?: number): Promise<{ matches: readonly Match[]; skipped: number }>;
   /** Признак для интерфейса: запись активного матча создана более новой версией приложения. */
   activeMatchIssue?(): ActiveMatchIssue | undefined;
   /** Подписка на изменения активного матча в других вкладках. Возвращает отписку. */
   onExternalChange?(listener: (event: ExternalActiveMatchChange) => void): () => void;
 }
+/**
+ * Запись активного матча отклонена, потому что её изменила другая вкладка.
+ * Проверка по имени, чтобы презентационный слой не импортировал инфраструктуру.
+ */
+export const isActiveMatchConflict = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'ActiveMatchConflictError';
+
 export interface PlayerRepository { list(): Promise<readonly Player[]>; save(player: Player): Promise<void>; delete?(playerId: PlayerId): Promise<boolean>; }
 export interface SettingsRepository { load(): Promise<Readonly<Record<string,string>>>; save(values: Readonly<Record<string,string>>): Promise<void>; }
 

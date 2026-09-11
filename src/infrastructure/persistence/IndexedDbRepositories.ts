@@ -196,6 +196,13 @@ function migrateActive(value: unknown): unknown {
 function emptyActiveDraft(match: Match): ActiveVisitDraft {
   return { playerId: match.players[match.currentPlayerIndex]!, draft: emptyDraft() };
 }
+/**
+ * Поколение хранилища. Меняется при восстановлении из копии и при стирании данных: всё,
+ * что вкладка помнила о ревизии активного матча, после этого недействительно.
+ */
+let storageEpoch = 0;
+const bumpStorageEpoch = (): void => { storageEpoch += 1; };
+
 const revisionOf = (value: unknown): number =>
   isRecord(value) && isInteger(value.revision) && value.revision >= 0 ? value.revision : 0;
 
@@ -217,6 +224,14 @@ export class IndexedDbMatchRepository implements MatchRepository {
   private revision: number | undefined;
   private issue: ActiveMatchIssue | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private epoch = storageEpoch;
+
+  /** После восстановления копии или стирания данных ревизия этой вкладки бессмысленна. */
+  private syncEpoch(): void {
+    if (this.epoch === storageEpoch) return;
+    this.epoch = storageEpoch;
+    this.revision = undefined;
+  }
 
   /** Признак для интерфейса: запись создана более новой версией приложения. */
   activeMatchIssue(): ActiveMatchIssue | undefined { return this.issue; }
@@ -235,6 +250,7 @@ export class IndexedDbMatchRepository implements MatchRepository {
 
   async saveActive(record: ActiveMatchRecord): Promise<void> {
     await this.serialize(async () => {
+      this.syncEpoch();
       const store = (await db()).transaction("meta", "readwrite");
       const stored = await store.objectStore("meta").get("activeMatch");
       const actual = revisionOf(stored);
@@ -262,6 +278,7 @@ export class IndexedDbMatchRepository implements MatchRepository {
   }
   async loadActive(): Promise<ActiveMatchRecord | undefined> {
     this.issue = undefined;
+    this.syncEpoch();
     const stored = await (await db()).get("meta", "activeMatch");
     if (stored === undefined) { this.revision = undefined; return undefined; }
     this.revision = revisionOf(stored);
@@ -400,6 +417,13 @@ export class IndexedDbSharedRepository {
   }
   async matches(token: string): Promise<readonly SharedMatchCache[]> {
     const rows = await (await db()).getAllFromIndex('companyMatches', 'byToken', IDBKeyRange.only(token));
+    return rows.map(toCache).filter((row): row is SharedMatchCache => row !== undefined);
+  }
+  /** Очередь на отправку: читается по индексу [token, state], без загрузки всей истории компании. */
+  async pendingMatches(token: string): Promise<readonly SharedMatchCache[]> {
+    const connected = await db();
+    const rows = (await Promise.all((['pending', 'error'] as const).map((state) =>
+      connected.getAllFromIndex('companyMatches', 'byTokenState', IDBKeyRange.only([token, state]))))).flat();
     return rows.map(toCache).filter((row): row is SharedMatchCache => row !== undefined);
   }
   async mergeRemote(token: string, matches: readonly Match[]): Promise<void> {
@@ -561,9 +585,11 @@ export class IndexedDbBackupRepository implements BackupRepository {
     for (const row of lastSetups) await meta.put(structuredClone(row.template), `lastSetup:${row.context}`);
     if (activeEnvelope) await meta.put(structuredClone(activeEnvelope), 'activeMatch');
     await transaction.done;
+    bumpStorageEpoch();
   }
 }
 export async function clearLocalData(): Promise<void> {
+  bumpStorageEpoch();
   if (database) {
     await database.then((opened) => opened.close()).catch(() => undefined);
     database = undefined;

@@ -19,6 +19,8 @@ type SharedCache = {
   /** Чтение-изменение-запись в одной транзакции хранилища. */
   updatePlayers?(token: string, mutate: (current: readonly Player[]) => readonly Player[]): Promise<readonly Player[]>;
   matches(token: string): Promise<readonly SharedMatchCache[]>;
+  /** Только неотправленные записи (по индексу), чтобы не читать всю историю компании. */
+  pendingMatches?(token: string): Promise<readonly SharedMatchCache[]>;
   mergeRemote(token: string, matches: readonly Match[]): Promise<void>;
   setState(token: string, matchId: string, state: SharedMatchState, details?: StateDetails): Promise<void>;
   /** Забыть матч локально (обе копии) и поставить надгробие против воскрешения. */
@@ -137,7 +139,8 @@ export class CompanySync {
 
   private async runSync(token: string): Promise<void> {
     const at = Date.parse(this.now());
-    const pending = (await this.cache.matches(token)).filter((item) => this.dueForUpload(item, Number.isFinite(at) ? at : Date.now()));
+    const rows = this.cache.pendingMatches ? await this.cache.pendingMatches(token) : await this.cache.matches(token);
+    const pending = rows.filter((item) => this.dueForUpload(item, Number.isFinite(at) ? at : Date.now()));
     const queue = [...pending];
     const worker = async (): Promise<void> => {
       for (let item = queue.shift(); item !== undefined; item = queue.shift()) await this.upload(token, item);
