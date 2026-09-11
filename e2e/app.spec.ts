@@ -1346,15 +1346,13 @@ test('Stage 4.6 Last Setup never replaces a missing profile by the same display 
       request.onerror = () => reject(request.error);
     });
     const transaction = database.transaction('meta', 'readwrite');
-    transaction
-      .objectStore('meta')
-      .put(
-        {
-          participants: [{ playerId: 'deleted-profile-id', name: 'Миша' }, { name: 'Гость' }],
-          setup: { mode: 'fixed_visits', visitsPerPlayer: 5, startingPlayerIndex: 0 },
-        },
-        'lastSetup:local',
-      );
+    transaction.objectStore('meta').put(
+      {
+        participants: [{ playerId: 'deleted-profile-id', name: 'Миша' }, { name: 'Гость' }],
+        setup: { mode: 'fixed_visits', visitsPerPlayer: 5, startingPlayerIndex: 0 },
+      },
+      'lastSetup:local',
+    );
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
