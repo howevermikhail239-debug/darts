@@ -2,10 +2,10 @@ import type { Match, Player, PlayerId } from "../../domain/match/models";
 
 export function persistentStatisticsPlayers(
   savedPlayers: readonly Player[],
-  matches: readonly Match[],
+  _matches: readonly Match[],
 ): readonly Player[] {
-  const participantIds = new Set(matches.flatMap((match) => match.players));
-  return savedPlayers.filter((player) => participantIds.has(player.id));
+  void _matches;
+  return savedPlayers;
 }
 
 export function persistentParticipantsInMatch(

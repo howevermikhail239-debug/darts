@@ -24,6 +24,8 @@ import { vibrateFor, type HapticEvent } from "../feedback/haptics";
 import { PlayerIdentity } from "../components/PlayerIdentity";
 import { toSummaryViewModel } from "../game/summaryViewModel";
 import { prepareResultShare } from "../../application/PrepareResultShare";
+import { notationOf } from "../../domain/darts/DartThrow";
+import { currentStreak } from "../../domain/statistics/todaySummary";
 type PendingDialog = { title: string; description: string; confirmLabel: string; destructive?: boolean; action: () => void };
 type Props = {
   session: GameSession;
@@ -126,6 +128,7 @@ export function GamePage({
     }
   };
   const view = toGameViewModel(snapshot, players, persistentPlayerIds);
+  const undoVisit = snapshot.undoVisit;
   if (view.completed)
     return (
       <Summary
@@ -210,6 +213,7 @@ export function GamePage({
         }}
         onConfirm={() => void confirm()}
       />
+      {view.checkoutHint ? <div className="checkout" role="status"><span>Возможное закрытие</span><strong>{view.checkoutHint}</strong></div> : null}
       {view.awaitingTieDecision ? (
         <div className="tie-panel">
           <h2>{t.draw}</h2>
@@ -258,10 +262,13 @@ export function GamePage({
       ) : null}
       <button
         className="undo-link"
+        aria-label={t.undo}
         onClick={() => void undo()}
+        disabled={!undoVisit}
       >
-        {t.undo}
+        {undoVisit ? `Отменить: ${snapshot.match.participantNames[undoVisit.playerId] ?? "Игрок"} · ${undoVisit.awardedScore}` : t.undo}
       </button>
+      {undoVisit && undoVisit.inputKind !== "aggregate" ? <small className="undo-preview">{undoVisit.darts.map(notationOf).join(" · ")}</small> : null}
       <Dialog open={Boolean(dialog)} title={dialog?.title ?? ""} description={dialog?.description ?? ""} confirmLabel={dialog?.confirmLabel ?? "Подтвердить"} destructive={Boolean(dialog?.destructive)} onCancel={() => setDialog(undefined)} onConfirm={() => { dialog?.action(); }} />
     </main>
   );
@@ -294,8 +301,9 @@ function Summary({
   const summary = useMemo(() => toSummaryViewModel(m, persistentPlayers), [m, persistentPlayers]);
   const records = useMemo(() => m.players.filter((playerId) => persistentPlayers.some((player) => player.id === playerId)).flatMap((playerId) => {
     const player = persistentPlayers.find((item) => item.id === playerId);
-    return newRecordsForMatch(m, previousMatches, playerId).map((record) => ({ ...record, playerName: player?.name ?? "Игрок" }));
+    return newRecordsForMatch(m, previousMatches, playerId, player?.statsResetAt).map((record) => ({ ...record, playerName: player?.name ?? "Игрок" }));
   }), [m, persistentPlayers, previousMatches]);
+  const streaks = useMemo(() => persistentPlayers.flatMap((player) => { const streak = currentStreak([...previousMatches, m], player.id, player.statsResetAt); return streak?.result === "win" && streak.count >= 2 ? [{ name: player.name, count: streak.count }] : []; }), [m, persistentPlayers, previousMatches]);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -328,7 +336,8 @@ function Summary({
       <section className="summary-facts" aria-label="Главные факты матча">{summary.facts.map((fact) => <article key={fact.label}><span>{fact.label}</span><strong>{fact.value}</strong></article>)}</section>
       <Scoreboard rows={view.scoreboard} />
       {summary.maximums > 0 ? <p className="summary-achievement">180 МАКСИМУМ · {summary.maximums}</p> : null}
-      {records.length > 0 ? <section className="new-records"><h2>Новый личный рекорд</h2>{records.map((record) => <p key={`${record.playerName}-${record.key}`}><span>{record.playerName} · {record.label}</span><strong>{record.percent ? `${record.value.toFixed(1)}%` : Number.isInteger(record.value) ? record.value : record.value.toFixed(1)}</strong></p>)}</section> : null}
+      {streaks.map((streak) => <p className="summary-achievement" key={streak.name}>🔥 {streak.name}: {streak.count}-я победа подряд</p>)}
+      {records.length > 0 ? <section className="new-records"><h2>🏅 Новый личный рекорд</h2>{records.map((record) => <p key={`${record.playerName}-${record.key}`}><span>{record.playerName} · {record.label}<small>Предыдущий: {record.percent ? `${record.previous.toFixed(1)}%` : Number.isInteger(record.previous) ? record.previous : record.previous.toFixed(1)}</small></span><strong>{record.percent ? `${record.value.toFixed(1)}%` : Number.isInteger(record.value) ? record.value : record.value.toFixed(1)}</strong></p>)}</section> : null}
       <section className="summary-actions">
         <button
           className="primary"

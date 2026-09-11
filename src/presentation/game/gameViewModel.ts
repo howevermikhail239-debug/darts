@@ -2,6 +2,7 @@ import type { SessionSnapshot } from "../../application/GameSession";
 import type { Match, Player, PlayerId } from "../../domain/match/models";
 import { statisticsForMatch } from "../../domain/statistics/StatisticsCalculator";
 import { draftIsEmpty, isDetailedDraft } from "../../domain/match/VisitDraft";
+import { checkoutSuggestion, checkoutText } from "../../domain/rules/checkoutSuggestion";
 
 export type ScoreboardRowViewModel = Readonly<{
   playerId: PlayerId;
@@ -32,6 +33,7 @@ export type GameViewModel = Readonly<{
   canAddNextDart: boolean;
   confirmLabel: string;
   draftHint: string;
+  checkoutHint?: string;
   summaryEyeline: string;
   summaryTitle: string;
 }>;
@@ -100,6 +102,10 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
     : isDetailedDraft(snapshot.draft)
       ? `Незавершённый подход · ${snapshot.draft.darts.length}/3 дротика`
       : `Незавершённый подход · сумма ${snapshot.draft.score}`;
+  const dartsRemaining = isDetailedDraft(snapshot.draft) ? 3 - snapshot.draft.darts.length : 0;
+  const checkoutScore = snapshot.evaluation.remainingAfter ?? (match.state.kind === "x01" ? match.state.remaining[currentPlayerId] : undefined);
+  const checkout = match.state.kind === "x01" && match.state.phase.kind === "regulation" && checkoutScore !== undefined
+    ? checkoutSuggestion(checkoutScore, dartsRemaining, match.state.outRule) : undefined;
 
   return {
     match,
@@ -121,6 +127,7 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       : snapshot.evaluation.status === "bust"
         ? "Подтвердить перебор"
         : `Подтвердить ${snapshot.evaluation.awardedScore}`,
+    ...(checkout ? { checkoutHint: `${checkoutScore} → ${checkoutText(checkout)}` } : {}),
     draftHint: match.state.kind === "fixed_visits"
       ? "Введите все три физических дротика"
       : "Можно подтвердить после трёх дротиков или досрочного завершения",

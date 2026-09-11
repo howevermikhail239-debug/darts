@@ -61,6 +61,30 @@ test('DATA_DIR selects a writable storage directory and health reports readiness
   } finally { if (server) await stop(server.child); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('profile management and match deletion are atomic, idempotent, and survive restart', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'darts-mutations-')); const file = join(dir, 'store.json'); let server;
+  try {
+    server = await start(file);
+    const created = await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const token = created.body.token;
+    const player = await json(`${server.url}/api/groups/${token}/players`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: ' Миша ' }) });
+    const id = player.body.player.id;
+    const historical = { ...match('history'), players: [id, 'temporary-b'], participantNames: { [id]: 'Миша', 'temporary-b': 'Гость' } };
+    assert.equal((await json(`${server.url}/api/groups/${token}/matches/history`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(historical) })).status, 201);
+    const renamed = await json(`${server.url}/api/groups/${token}/players/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: ' Михаил ' }) });
+    assert.equal(renamed.body.player.id, id); assert.equal(renamed.body.player.name, 'Михаил');
+    const reset = await json(`${server.url}/api/groups/${token}/players/${id}/statistics-reset`, { method: 'POST' });
+    assert.match(reset.body.player.statsResetAt, /^2026-/);
+    assert.equal((await json(`${server.url}/api/groups/${token}/matches/history`, { method: 'DELETE' })).status, 200);
+    assert.equal((await json(`${server.url}/api/groups/${token}/matches/history`, { method: 'DELETE' })).status, 200);
+    assert.equal((await json(`${server.url}/api/groups/${token}/players/${id}`, { method: 'DELETE' })).status, 200);
+    assert.equal((await json(`${server.url}/api/groups/${token}/players/${id}`, { method: 'DELETE' })).status, 200);
+    await stop(server.child); server = await start(file);
+    const snapshot = await json(`${server.url}/api/groups/${token}`);
+    assert.deepEqual(snapshot.body.players, []); assert.deepEqual(snapshot.body.matches, []);
+  } finally { if (server) await stop(server.child); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('health reports unavailable without replacing corrupt storage', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'darts-corrupt-')); const file = join(dir, 'dart-scorekeeper.json'); let server;
   try {

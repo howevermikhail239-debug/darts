@@ -18,8 +18,9 @@ export interface MatchRepository {
   loadActive(): Promise<ActiveMatchRecord|undefined>;
   archiveAndClearActive(match: Match): Promise<void>;
   listHistory(): Promise<readonly Match[]>;
+  deleteHistory?(matchId: string): Promise<boolean>;
 }
-export interface PlayerRepository { list(): Promise<readonly Player[]>; save(player: Player): Promise<void>; }
+export interface PlayerRepository { list(): Promise<readonly Player[]>; save(player: Player): Promise<void>; delete?(playerId: PlayerId): Promise<boolean>; }
 export interface SettingsRepository { load(): Promise<Readonly<Record<string,string>>>; save(values: Readonly<Record<string,string>>): Promise<void>; }
 export type BackupData = Readonly<{
   players: readonly Player[];

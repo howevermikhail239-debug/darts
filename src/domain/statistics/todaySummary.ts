@@ -51,10 +51,17 @@ export function summarizeToday(
 
 export type RecentResult = "win" | "loss" | "draw";
 
-export function recentForm(matches: readonly Match[], playerId: PlayerId, limit = 5): readonly RecentResult[] {
+export function recentForm(matches: readonly Match[], playerId: PlayerId, limit = 5, statsResetAt?: string): readonly RecentResult[] {
   return matches
-    .filter((match) => match.status === "completed" && match.players.includes(playerId))
+    .filter((match) => match.status === "completed" && match.players.includes(playerId) && (!statsResetAt || match.createdAt >= statsResetAt))
     .sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt))
     .slice(0, limit)
     .map((match) => match.winnerId === undefined ? "draw" : match.winnerId === playerId ? "win" : "loss");
+}
+
+export type CurrentStreak = Readonly<{ result: RecentResult; count: number }>;
+export function currentStreak(matches: readonly Match[], playerId: PlayerId, statsResetAt?: string): CurrentStreak | undefined {
+  const form = recentForm(matches, playerId, Number.MAX_SAFE_INTEGER, statsResetAt);
+  const result = form[0]; if (!result) return undefined;
+  return { result, count: form.findIndex((item) => item !== result) < 0 ? form.length : form.findIndex((item) => item !== result) };
 }

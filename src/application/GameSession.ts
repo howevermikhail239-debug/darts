@@ -33,6 +33,7 @@ export type SessionSnapshot = Readonly<{
   evaluation: DraftEvaluation;
   isConfirming: boolean;
   notice?: string;
+  undoVisit?: Visit;
 }>;
 const MAX_UNDO_CHECKPOINTS = 20;
 export class GameSession {
@@ -66,7 +67,9 @@ export class GameSession {
       evaluation: rulesFor(this.match).evaluateDraft(this.draft, this.match),
       isConfirming: this.confirming,
     };
-    return this.notice ? { ...value, notice: this.notice } : value;
+    const undoVisit = this.match.confirmedVisits.at(-1);
+    const withUndo = this.checkpoints.length && undoVisit ? { ...value, undoVisit } : value;
+    return this.notice ? { ...withUndo, notice: this.notice } : withUndo;
   }
   async record(dart: DartThrow, replaceIndex?: number): Promise<SessionSnapshot> {
     this.ensureMutable();

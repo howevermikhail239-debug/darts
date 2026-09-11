@@ -15,6 +15,28 @@ export class CompanySync {
   async addPlayer(token: string, name: string): Promise<Player> {
     const player = await this.gateway.createPlayer(token, name); const players = await this.cache.players(token); await this.cache.savePlayers(token, [...players, player]); return player;
   }
+  async renamePlayer(token: string, playerId: string, name: string): Promise<Player> {
+    const player = await this.gateway.renamePlayer(token, playerId, name);
+    const players = await this.cache.players(token);
+    await this.cache.savePlayers(token, players.map((item) => item.id === player.id ? player : item));
+    return player;
+  }
+  async resetPlayerStatistics(token: string, playerId: string): Promise<Player> {
+    const player = await this.gateway.resetPlayerStatistics(token, playerId);
+    const players = await this.cache.players(token);
+    await this.cache.savePlayers(token, players.map((item) => item.id === player.id ? player : item));
+    return player;
+  }
+  async deletePlayer(token: string, playerId: string): Promise<void> {
+    await this.gateway.deletePlayer(token, playerId);
+    await this.cache.savePlayers(token, (await this.cache.players(token)).filter((item) => item.id !== playerId));
+  }
+  async deleteMatch(token: string, matchId: string): Promise<void> {
+    await this.gateway.deleteMatch(token, matchId);
+    const result = await this.gateway.loadCompany(token);
+    await this.cache.savePlayers(token, result.players);
+    await this.cache.mergeRemote(token, result.matches);
+  }
   async sync(token: string): Promise<void> {
     const cached = await this.cache.matches(token);
     for (const item of cached.filter(item => item.state !== 'synced')) {

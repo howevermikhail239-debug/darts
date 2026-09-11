@@ -61,6 +61,12 @@ export default function App() {
   const savedPlayers = company.company ? company.players : match.players;
   const persistentIds = useMemo(() => savedPlayers.map((player) => player.id), [savedPlayers]);
   const today = useMemo(() => summarizeToday(visibleHistory, persistentIds, new Date()), [persistentIds, visibleHistory]);
+  const deleteProfile = async (playerId: string) => {
+    const activeSession = match.active ?? match.resume;
+    if (activeSession?.snapshot.match.status === "in_progress" && activeSession.snapshot.match.players.includes(playerId))
+      throw new Error("Нельзя удалить игрока из незавершённого матча.");
+    await (company.company ? company.deletePlayer(playerId) : match.deletePlayer(playerId));
+  };
 
   if (company.loading || match.loading || lastSetup.loading) return <main className="loading">Загружаем дартс…</main>;
   const fatal = match.error ?? company.error;
@@ -90,13 +96,13 @@ export default function App() {
     );
   }
   if (screen === "history") {
-    return <Suspense fallback={screenFallback}><HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} persistentPlayerIds={persistentIds} onBack={showHome} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, savedPlayers); } catch (cause) { match.setError(cause instanceof Error ? cause.message : "Не удалось начать новый матч"); showHome(); } }} /></Suspense>;
+    return <Suspense fallback={screenFallback}><HistoryPage matches={visibleHistory} players={playersForMatches(savedPlayers, visibleHistory)} persistentPlayerIds={persistentIds} onBack={showHome} onDelete={company.company ? company.deleteMatch : match.deleteMatch} onRematch={async (historicalMatch) => { try { await match.rematch(historicalMatch, savedPlayers); } catch (cause) { match.setError(cause instanceof Error ? cause.message : "Не удалось начать новый матч"); showHome(); } }} /></Suspense>;
   }
   if (screen === "statistics") {
     return <Suspense fallback={screenFallback}><StatisticsPage matches={visibleHistory} players={persistentStatisticsPlayers(savedPlayers, visibleHistory)} initialPlayerIds={statisticsContext} onBack={showHome} /></Suspense>;
   }
   if (screen === "settings") {
-    return <SettingsPage onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} hapticsSupported={typeof navigator.vibrate === "function"} hapticsEnabled={preferences.hapticsEnabled} onHaptics={preferences.setHapticsEnabled} />;
+    return <SettingsPage players={savedPlayers} onRename={company.company ? company.renamePlayer : match.renamePlayer} onResetStatistics={company.company ? company.resetPlayerStatistics : match.resetPlayerStatistics} onDeletePlayer={deleteProfile} onBack={showHome} onExport={services.exportBackup} onRestore={services.restoreBackup} hapticsSupported={typeof navigator.vibrate === "function"} hapticsEnabled={preferences.hapticsEnabled} onHaptics={preferences.setHapticsEnabled} />;
   }
 
   const resumeView = match.resume ? toGameViewModel(match.resume.snapshot, playersForMatches(savedPlayers, [match.resume.snapshot.match])) : undefined;

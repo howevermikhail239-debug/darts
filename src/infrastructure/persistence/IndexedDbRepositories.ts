@@ -100,7 +100,8 @@ function isMatch(value: unknown): value is Match {
   return value.state.kind === "fixed_visits" && isInteger(value.state.visitsPerPlayer) && value.state.visitsPerPlayer >= 1 && isPlayerNumberRecord(value.state.totals, value.players, 0) && isPlayerNumberRecord(value.state.regulationCompleted, value.players, 0) && isInteger(value.state.extraRoundsCompleted) && value.state.extraRoundsCompleted >= 0 && isFixedVisitsPhase(value.state.phase);
 }
 function isPlayer(value: unknown): value is Player {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.createdAt);
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.createdAt)
+    && (value.statsResetAt === undefined || isString(value.statsResetAt));
 }
 function isSettings(value: unknown): value is Readonly<Record<string, string>> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
@@ -202,6 +203,13 @@ export class IndexedDbMatchRepository implements MatchRepository {
       .filter(isMatch)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
+  async deleteHistory(matchId: string): Promise<boolean> {
+    const database = await db();
+    const existing = await database.get("matches", matchId);
+    if (!existing) return false;
+    await database.delete("matches", matchId);
+    return true;
+  }
 }
 export class IndexedDbPlayerRepository implements PlayerRepository {
   async list(): Promise<readonly Player[]> {
@@ -211,6 +219,13 @@ export class IndexedDbPlayerRepository implements PlayerRepository {
   }
   async save(player: Player): Promise<void> {
     await (await db()).put("players", structuredClone(player));
+  }
+  async delete(playerId: string): Promise<boolean> {
+    const database = await db();
+    const existing = await database.get("players", playerId);
+    if (!existing) return false;
+    await database.delete("players", playerId);
+    return true;
   }
 }
 
@@ -231,6 +246,11 @@ export class IndexedDbSharedRepository {
   }
   async mergeRemote(token: string, matches: readonly Match[]): Promise<void> {
     const database = await db(); const tx = database.transaction('meta', 'readwrite');
+    const remoteIds = new Set(matches.map((match) => match.id));
+    for (const key of await tx.store.getAllKeys()) {
+      const existing = await tx.store.get(key) as SharedMatchCache | undefined;
+      if (isRecord(existing) && existing.token === token && isRecord(existing.match) && existing.state === 'synced' && !remoteIds.has(String(existing.match.id))) await tx.store.delete(key);
+    }
     for (const match of matches) {
       if (!isMatch(match) || match.status === 'in_progress') continue;
       const key = `match:${token}:${match.id}`; const existing = await tx.store.get(key) as SharedMatchCache | undefined;

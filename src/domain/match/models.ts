@@ -3,7 +3,7 @@ import type { DartThrow } from '../darts/DartThrow';
 export type PlayerId = string;
 export type MatchId = string;
 export type MatchStatus = 'in_progress'|'completed'|'abandoned';
-export type Player = Readonly<{ id: PlayerId; name: string; createdAt: string }>;
+export type Player = Readonly<{ id: PlayerId; name: string; createdAt: string; statsResetAt?: string }>;
 export type VisitResult = 'scored'|'bust'|'match_won'|'tie_pending';
 export type VisitContext = Readonly<{ scores: Readonly<Record<PlayerId, number>>; currentPlayerIndex: number }>;
 type VisitBase = Readonly<{

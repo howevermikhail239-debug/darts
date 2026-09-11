@@ -19,14 +19,14 @@ export type PlayerStatistics = Readonly<{
 }>;
 
 export type PlayerHistoryStatistics = PlayerStatistics & Readonly<{
-  completedGames: number; wins: number; losses: number; winRate: number; matches: number;
+  completedGames: number; wins: number; losses: number; draws: number; winRate: number; matches: number;
 }>;
 
 export type PlayerRecords = Readonly<{
   bestVisit: number; bestThreeDartAverage: number; most100Plus: number; most140Plus: number;
   most180s: number; mostTriples: number; mostBulls: number; lowestMissPercent?: number;
 }>;
-export type RecordImprovement = Readonly<{ key: keyof PlayerRecords; label: string; value: number; percent?: boolean }>;
+export type RecordImprovement = Readonly<{ key: keyof PlayerRecords; label: string; value: number; previous: number; percent?: boolean }>;
 export type TrendMetric = "threeDartAverage" | "bestVisit" | "missPercent" | "triplePercent" | "100Plus";
 export type TrendPoint = Readonly<{ matchId: string; date: string; value: number }>;
 export type HeadToHeadStatistics = Readonly<{ sharedMatches: number; playerAWins: number; playerBWins: number; otherPlayerWins: number }>;

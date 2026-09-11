@@ -78,6 +78,22 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     setPlayers(await dependencies.players.list());
     return player;
   }, [dependencies]);
+  const renamePlayer = useCallback(async (playerId: string, name: string) => {
+    const trimmed = name.trim(); if (!trimmed || trimmed.length > 80) throw new Error("Имя должно содержать от 1 до 80 символов.");
+    const player = (await dependencies.players.list()).find((item) => item.id === playerId); if (!player) throw new Error("Игрок не найден.");
+    await dependencies.players.save({ ...player, name: trimmed }); setPlayers(await dependencies.players.list());
+  }, [dependencies]);
+  const resetPlayerStatistics = useCallback(async (playerId: string) => {
+    const player = (await dependencies.players.list()).find((item) => item.id === playerId); if (!player) throw new Error("Игрок не найден.");
+    await dependencies.players.save({ ...player, statsResetAt: dependencies.now() }); setPlayers(await dependencies.players.list());
+  }, [dependencies]);
+  const deletePlayer = useCallback(async (playerId: string) => {
+    const current = active ?? resume;
+    if (current?.snapshot.match.status === "in_progress" && current.snapshot.match.players.includes(playerId)) throw new Error("Нельзя удалить игрока из незавершённого матча.");
+    if (!dependencies.players.delete) throw new Error("Удаление профиля недоступно.");
+    await dependencies.players.delete(playerId); setPlayers(await dependencies.players.list());
+  }, [active, dependencies, resume]);
+  const deleteMatch = useCallback(async (matchId: string) => { if (!dependencies.matches.deleteHistory) throw new Error("Удаление матча недоступно."); await dependencies.matches.deleteHistory(matchId); setHistory(await dependencies.matches.listHistory()); }, [dependencies]);
 
   const start = useCallback(async (participants: readonly SetupParticipant[], setup: MatchSetup) => {
     if (resume) {
@@ -154,6 +170,10 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     setSnapshot: (snapshot: SessionSnapshot) => setActive((current) => current ? { ...current, snapshot } : current),
     start,
     addPlayer,
+    renamePlayer,
+    resetPlayerStatistics,
+    deletePlayer,
+    deleteMatch,
     close,
     backToHome,
     continueResume,

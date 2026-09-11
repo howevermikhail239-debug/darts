@@ -5,5 +5,9 @@ export interface CompanyGateway {
   createCompany(name: string): Promise<SharedCompany>;
   loadCompany(token: string): Promise<CompanySnapshot>;
   createPlayer(token: string, name: string): Promise<Player>;
+  renamePlayer(token: string, playerId: string, name: string): Promise<Player>;
+  resetPlayerStatistics(token: string, playerId: string): Promise<Player>;
+  deletePlayer(token: string, playerId: string): Promise<void>;
   uploadMatch(token: string, match: Match): Promise<void>;
+  deleteMatch(token: string, matchId: string): Promise<void>;
 }

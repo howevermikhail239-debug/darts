@@ -37,6 +37,10 @@ class FakeGateway implements CompanyGateway {
   async createCompany() { return company; }
   async loadCompany() { if (this.failLoad) throw new Error('offline'); return this.snapshot; }
   async createPlayer() { return player; }
+  async renamePlayer(token: string, playerId: string, name: string) { void token; return { ...player, id: playerId, name }; }
+  async resetPlayerStatistics(token: string, playerId: string) { void token; return { ...player, id: playerId, statsResetAt: '2026-09-11T12:00:00.000Z' }; }
+  async deletePlayer() {}
+  async deleteMatch() {}
   async uploadMatch(token: string, value: Match) {
     void token;
     this.uploaded.push(value.id);

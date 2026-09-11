@@ -127,6 +127,26 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     return player;
   }, [sync]);
 
+  const mutatePlayer = useCallback(async (operation: (token: string) => Promise<Player>) => {
+    const token = currentToken.current;
+    if (!token || !navigator.onLine) throw new Error("Для изменения данных требуется подключение к серверу.");
+    const player = await operation(token);
+    setPlayers(await cache.players(token));
+    return player;
+  }, [cache]);
+  const renamePlayer = useCallback((playerId: string, name: string) => mutatePlayer((token) => sync.renamePlayer(token, playerId, name)), [mutatePlayer, sync]);
+  const resetPlayerStatistics = useCallback((playerId: string) => mutatePlayer((token) => sync.resetPlayerStatistics(token, playerId)), [mutatePlayer, sync]);
+  const deletePlayer = useCallback(async (playerId: string) => {
+    const token = currentToken.current;
+    if (!token || !navigator.onLine) throw new Error("Для удаления требуется подключение к серверу.");
+    await sync.deletePlayer(token, playerId); setPlayers(await cache.players(token));
+  }, [cache, sync]);
+  const deleteMatch = useCallback(async (matchId: string) => {
+    const token = currentToken.current;
+    if (!token || !navigator.onLine) throw new Error("Для удаления требуется подключение к серверу.");
+    await sync.deleteMatch(token, matchId); await applyCache(token, generation.current);
+  }, [applyCache, sync]);
+
   const leaveCompany = useCallback(() => {
     generation.current += 1;
     currentToken.current = undefined;
@@ -147,6 +167,10 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     error,
     createCompany,
     addPlayer,
+    renamePlayer,
+    resetPlayerStatistics,
+    deletePlayer,
+    deleteMatch,
     leaveCompany,
     retry,
     syncAfterMatch: retry,
