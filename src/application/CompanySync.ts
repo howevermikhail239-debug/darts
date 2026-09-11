@@ -114,10 +114,10 @@ export class CompanySync {
     });
   }
 
-  async sync(token: string): Promise<void> {
+  async sync(token: string, forceRetry = false): Promise<void> {
     // Защита от повторного входа: открытие компании и событие online иначе удваивают трафик.
     if (this.syncing) return this.syncing;
-    const running = this.enqueue(() => this.runSync(token));
+    const running = this.enqueue(() => this.runSync(token, forceRetry));
     this.syncing = running;
     try { await running; } finally { this.syncing = undefined; }
   }
@@ -148,10 +148,12 @@ export class CompanySync {
     }
   }
 
-  private async runSync(token: string): Promise<void> {
+  private async runSync(token: string, forceRetry: boolean): Promise<void> {
     const at = Date.parse(this.now());
     const rows = this.cache.pendingMatches ? await this.cache.pendingMatches(token) : await this.cache.matches(token);
-    const pending = rows.filter((item) => this.dueForUpload(item, Number.isFinite(at) ? at : Date.now()));
+    const pending = rows.filter((item) =>
+      this.dueForUpload(item, Number.isFinite(at) ? at : Date.now())
+      || (forceRetry && item.state === 'error'));
     const queue = [...pending];
     const worker = async (): Promise<void> => {
       for (let item = queue.shift(); item !== undefined; item = queue.shift()) await this.upload(token, item);

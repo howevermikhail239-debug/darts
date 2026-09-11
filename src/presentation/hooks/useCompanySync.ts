@@ -70,17 +70,23 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     setNote(matches.some((item) => item.state !== "synced") ? "Матч ожидает отправки." : "Все матчи синхронизированы");
   }, [cache]);
 
-  const retry = useCallback(async () => {
+  const synchronize = useCallback(async (forceRetry: boolean) => {
     const token = currentToken.current;
     if (!token) return;
     const expectedGeneration = generation.current;
     try {
-      await sync.sync(token);
+      await sync.sync(token, forceRetry);
       await applyCache(token, expectedGeneration);
     } catch {
       if (currentToken.current === token && generation.current === expectedGeneration) setNote(offlineNote);
     }
   }, [applyCache, sync]);
+
+  // Explicit user retries and a browser "online" event bypass exponential
+  // backoff. Automatic post-match sync keeps it, so a bad connection cannot
+  // create a tight request loop.
+  const retry = useCallback(() => synchronize(true), [synchronize]);
+  const syncAfterMatch = useCallback(() => synchronize(false), [synchronize]);
 
   useEffect(() => {
     const token = activeToken;
@@ -108,7 +114,7 @@ export function useCompanySync({ sync, cache }: Dependencies) {
         setCompany(opened);
         if (!known) setCatalogRevision((value) => value + 1);
         await applyCache(token, expectedGeneration);
-        if (active && generation.current === expectedGeneration) void retry();
+        if (active && generation.current === expectedGeneration) void syncAfterMatch();
       } catch (cause) {
         if (!active || generation.current !== expectedGeneration) return;
         if (known) setNote(offlineNote);
@@ -124,7 +130,7 @@ export function useCompanySync({ sync, cache }: Dependencies) {
       }
     });
     return () => { active = false; };
-  }, [activeToken, applyCache, cache, retry, sync]);
+  }, [activeToken, applyCache, cache, sync, syncAfterMatch]);
 
   useEffect(() => {
     if (!company) return;
@@ -226,6 +232,6 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     deleteMatch,
     leaveCompany,
     retry,
-    syncAfterMatch: retry,
+    syncAfterMatch,
   };
 }

@@ -49,7 +49,7 @@ async function installZeroTieBreakFixture(page: import("@playwright/test").Page)
       draft: { playerId: "a", draft: { darts: [] } },
     };
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("dart-scorekeeper", 1);
+      const request = indexedDB.open("dart-scorekeeper");
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const database = request.result;
@@ -72,7 +72,7 @@ async function installSavedProfiles(page: import("@playwright/test").Page) {
       { id: "saved-player-2", name: "Игрок 2", createdAt: "2026-09-08T12:00:00.000Z" },
     ];
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("dart-scorekeeper", 1);
+      const request = indexedDB.open("dart-scorekeeper");
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const database = request.result;
@@ -417,13 +417,16 @@ test("limited 501 picks the minimum remaining only after both players finish the
   await expect(page.getByRole("heading", { name: "Игрок 1 победил" })).toBeVisible();
 });
 
-test("limited 501 ends immediately when zero is reached before the visit limit", async ({ page }) => {
+test("limited 501 finishes the round when zero is reached before the visit limit", async ({ page }) => {
   await startLimited501(page, 2, 20);
   await scoreToSixty(page);
   await page.getByRole("button", { name: "×3" }).click();
   await page.getByRole("button", { name: "Сектор 20, множитель 3" }).click();
   await expect(page.getByRole("button", { name: "Дротик 2: пусто" })).toBeVisible();
   await page.getByRole("button", { name: "Подтвердить 60" }).click();
+  await expect(page.getByRole("heading", { name: /победил/ })).toHaveCount(0);
+  await expect(page.getByText("Текущий подход: Игрок 2")).toBeVisible();
+  await missVisit(page);
   await expect(page.getByRole("heading", { name: "Игрок 1 победил" })).toBeVisible();
 });
 
@@ -767,8 +770,8 @@ test('offline completed company match survives reload and manual retry uploads i
     const a = await aContext.newPage(); await createCompanyWithPlayers(a, 'Оффлайн лига', ['Миша', 'Саша']); const url = a.url();
     await a.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' }); await a.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Саша' });
     await a.route('**/api/**', route => route.abort()); await oneVisitSeries(a, 20, 0); await a.getByRole('button', { name: 'На главную' }).click();
-    await expect(a.getByRole('status')).toContainText('Нет связи'); await a.reload(); await expect(a.getByText('Компания · Оффлайн лига')).toBeVisible(); await expect(a.getByRole('status')).toContainText('Нет связи');
-    await a.unroute('**/api/**'); await a.getByRole('button', { name: 'Повторить' }).click(); await expect(a.getByRole('status')).toContainText('Все матчи синхронизированы');
+    await expect(a.locator('.sync-state')).toContainText('Нет связи'); await a.reload(); await expect(a.getByText('Компания · Оффлайн лига')).toBeVisible(); await expect(a.locator('.sync-state')).toContainText('Нет связи');
+    await a.unroute('**/api/**'); await a.getByRole('button', { name: 'Повторить' }).click(); await expect(a.locator('.sync-state')).toContainText('Все матчи синхронизированы');
     const b = await bContext.newPage(); await b.goto(url); await b.getByRole('button', { name: 'История' }).click(); await expect(b.locator('.history-match')).toHaveCount(1);
     await a.getByRole('button', { name: 'История' }).click(); await expect(a.locator('.history-match')).toHaveCount(1);
   } finally { await aContext.close(); await bContext.close(); }
@@ -843,7 +846,7 @@ test('stable local profile ids aggregate across matches and completed match open
 
   const playerIdsByMatch = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('dart-scorekeeper', 1);
+      const request = indexedDB.open('dart-scorekeeper');
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -953,7 +956,7 @@ test('stage 4 eight-player round keeps active player readable in an internal rai
 
 async function activeMatchIdentity(page: import('@playwright/test').Page) {
   return page.evaluate(async () => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('dart-scorekeeper', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('dart-scorekeeper'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
     const active = await new Promise<{ current: { id: string; players: string[]; startingPlayerIndex: number } }>((resolve, reject) => { const request = database.transaction('meta').objectStore('meta').get('activeMatch'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
     database.close();
     return { id: active.current.id, players: active.current.players, starter: active.current.startingPlayerIndex };
@@ -1126,7 +1129,7 @@ test('Stage 4.6 Last Setup never replaces a missing profile by the same display 
   await page.goto('/');
   await createLocalProfile(page, 'Миша');
   await page.evaluate(async () => {
-    const request = indexedDB.open('dart-scorekeeper', 1);
+    const request = indexedDB.open('dart-scorekeeper');
     const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
     const transaction = database.transaction('meta', 'readwrite');
     transaction.objectStore('meta').put({ participants: [{ playerId: 'deleted-profile-id', name: 'Миша' }, { name: 'Гость' }], setup: { mode: 'fixed_visits', visitsPerPlayer: 5, startingPlayerIndex: 0 } }, 'lastSetup:local');

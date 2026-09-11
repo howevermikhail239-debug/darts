@@ -156,6 +156,25 @@ describe('CompanySync', () => {
     expect(gateway.uploaded).toEqual(['flaky', 'flaky']);
   });
 
+  it('lets an explicit retry bypass backoff without retrying permanent failures', async () => {
+    const cache = new MemoryCache();
+    cache.cachedMatches = [
+      { token: company.token, match: match('flaky'), state: 'pending' },
+      { token: company.token, match: match('too-big'), state: 'rejected' },
+    ];
+    const gateway = new FakeGateway(snapshot(), new Set(['flaky']));
+    const sync = new CompanySync(cache, gateway, () => '2026-09-11T12:00:00.000Z');
+
+    await sync.sync(company.token);
+    expect(gateway.uploaded).toEqual(['flaky']);
+    gateway.failingIds.delete('flaky');
+
+    await sync.sync(company.token, true);
+    expect(gateway.uploaded).toEqual(['flaky', 'flaky']);
+    expect(cache.cachedMatches.find((item) => item.match.id === 'flaky')).toMatchObject({ state: 'synced' });
+    expect(gateway.uploaded).not.toContain('too-big');
+  });
+
   it('uploads in parallel and refuses to run two syncs at once', async () => {
     const cache = new MemoryCache();
     cache.cachedMatches = Array.from({ length: 9 }, (_unused, index) => ({ token: company.token, match: match(`m${index}`), state: 'pending' as const }));
