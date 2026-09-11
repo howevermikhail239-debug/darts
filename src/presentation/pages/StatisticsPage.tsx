@@ -61,7 +61,9 @@ function ContextSwitcher({ players, selectedPlayerId, onCompare, onPlayer }: { p
 }
 
 function Overview({ matchesByPlayer, players, onSelect, onCompare }: { matchesByPlayer: ReadonlyMap<PlayerId, readonly Match[]>; players: readonly Player[]; onSelect: (id: PlayerId) => void; onCompare: () => void }) {
-  return <><section className="stats-player-grid" aria-label="Игроки">{players.map((player) => { const stats = statisticsForPlayerHistory(matchesByPlayer.get(player.id) ?? [], player.id, "all", "all", player.statsResetAt); return <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}><PlayerIdentity playerId={player.id} name={player.name} /><Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} /><Metric label="Лучший подход" value={stats.bestVisit} /><Metric label="Победы" value={pct(stats.winRate)} /><Metric label="180" value={stats.thresholds["180"]} /></button>; })}</section>
+  // PERF-5: обзор считал статистику каждого игрока заново на каждый рендер.
+  const cards = useMemo(() => players.map((player) => ({ player, stats: statisticsForPlayerHistory(matchesByPlayer.get(player.id) ?? [], player.id, "all", "all", player.statsResetAt) })), [matchesByPlayer, players]);
+  return <><section className="stats-player-grid" aria-label="Игроки">{cards.map(({ player, stats }) => <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}><PlayerIdentity playerId={player.id} name={player.name} /><Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} /><Metric label="Лучший подход" value={stats.bestVisit} /><Metric label="Победы" value={pct(stats.winRate)} /><Metric label="180" value={stats.thresholds["180"]} /></button>)}</section>
     {players.length >= 2 ? <button className="primary stats-compare-action" onClick={onCompare}>Сравнить игроков</button> : null}</>;
 }
 

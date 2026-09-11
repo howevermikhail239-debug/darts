@@ -1,10 +1,12 @@
 import type { BackupData, BackupRepository } from './ports/repositories';
 
 export const BACKUP_TYPE = 'darts-scorekeeper-backup';
-export const BACKUP_VERSION = 1;
+/** Версия 2 добавила секции компании (companies / companyPlayers / companyMatches) и lastSetups. */
+export const BACKUP_VERSION = 2;
+export const SUPPORTED_BACKUP_VERSIONS: readonly number[] = [1, 2];
 export type BackupEnvelope = Readonly<{
   type: typeof BACKUP_TYPE;
-  version: typeof BACKUP_VERSION;
+  version: number;
   exportedAt: string;
   data: BackupData;
 }>;
@@ -20,6 +22,8 @@ export async function restoreBackup(repository: BackupRepository, json: string):
   if (!parsed || typeof parsed !== 'object') throw new Error('Некорректный формат резервной копии.');
   const value = parsed as Record<string, unknown>;
   if (value.type !== BACKUP_TYPE) throw new Error('Это не резервная копия Dart Scorekeeper.');
-  if (value.version !== BACKUP_VERSION) throw new Error('Версия резервной копии не поддерживается.');
+  if (typeof value.version !== 'number' || !SUPPORTED_BACKUP_VERSIONS.includes(value.version))
+    throw new Error('Версия резервной копии не поддерживается.');
+  // Копия версии 1 просто не содержит секций компании — восстанавливается как есть.
   await repository.replaceAll(value.data as BackupData);
 }

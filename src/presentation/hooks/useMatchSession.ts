@@ -5,6 +5,7 @@ import { GameSession, type Clock, type IdGenerator, type SessionSnapshot } from 
 import type { MatchRepository, PlayerRepository } from "../../application/ports/repositories";
 import type { SetupParticipant } from "../pages/SetupPage";
 import { prepareRematch } from "../../application/PrepareRematch";
+import { STORAGE_FAILURE } from "../errors/userMessage";
 
 type ActiveSession = Readonly<{ session: GameSession; snapshot: SessionSnapshot }>;
 type PendingStart = Readonly<{ participants: readonly SetupParticipant[]; setup: MatchSetup }>;
@@ -57,7 +58,10 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
         setResume({ session, snapshot: session.snapshot() });
       }
     }).catch((cause: unknown) => {
-      if (activeEffect) setError(cause instanceof Error ? cause.message : "Ошибка локального хранилища");
+      // DATA-4: это отказ ЛОКАЛЬНОГО ХРАНИЛИЩА — единственная по-настоящему
+      // фатальная категория. Техническая подробность идёт в консоль, а не в интерфейс.
+      console.error("Отказ локального хранилища при загрузке данных:", cause);
+      if (activeEffect) setError(STORAGE_FAILURE);
     }).finally(() => {
       if (activeEffect) setLoading(false);
     });
@@ -87,12 +91,12 @@ export function useMatchSession({ dependencies, companyToken, onShowGame, onShow
     const player = (await dependencies.players.list()).find((item) => item.id === playerId); if (!player) throw new Error("Игрок не найден.");
     await dependencies.players.save({ ...player, statsResetAt: dependencies.now() }); setPlayers(await dependencies.players.list());
   }, [dependencies]);
+  // Правило «нельзя удалить игрока из незавершённого матча» живёт в одном месте —
+  // в `useDataSource`, который одинаково закрывает локальный режим и режим компании (ARCH-3).
   const deletePlayer = useCallback(async (playerId: string) => {
-    const current = active ?? resume;
-    if (current?.snapshot.match.status === "in_progress" && current.snapshot.match.players.includes(playerId)) throw new Error("Нельзя удалить игрока из незавершённого матча.");
     if (!dependencies.players.delete) throw new Error("Удаление профиля недоступно.");
     await dependencies.players.delete(playerId); setPlayers(await dependencies.players.list());
-  }, [active, dependencies, resume]);
+  }, [dependencies]);
   const deleteMatch = useCallback(async (matchId: string) => { if (!dependencies.matches.deleteHistory) throw new Error("Удаление матча недоступно."); await dependencies.matches.deleteHistory(matchId); setHistory(await dependencies.matches.listHistory()); }, [dependencies]);
 
   const start = useCallback(async (participants: readonly SetupParticipant[], setup: MatchSetup) => {

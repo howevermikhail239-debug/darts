@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CompanySync, SharedCompany } from "../../application/CompanySync";
 import type { Match, Player } from "../../domain/match/models";
 import { networkMessage } from "../errors/userMessage";
+import type { SharedMatchState } from "../../application/ports/repositories";
 
 type SharedMatch = Readonly<{
   match: Match;
-  state: "pending" | "synced" | "error";
+  state: SharedMatchState;
 }>;
 
 type SharedCache = Readonly<{

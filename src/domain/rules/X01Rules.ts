@@ -149,7 +149,11 @@ export class X01Rules implements GameRules {
       const regulationComplete = match.players.every(id =>
         (visitsCompleted[id] ?? 0) >= visitsPerPlayer,
       );
-      if (regulationComplete) {
+      // A checkout stops the match at the end of its own round: everybody gets the same number of
+      // visits, and the result is read from the remaining scores once that round is complete.
+      const roundComplete = nextIndex === match.startingPlayerIndex;
+      const someoneFinished = match.players.some(id => remaining[id] === 0);
+      if (regulationComplete || (someoneFinished && roundComplete)) {
         const leaders = leadersByMinimumRemaining(nextState, match.players);
         if (leaders.length === 1) {
           const winnerId = leaders[0]!;

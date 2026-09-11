@@ -18,8 +18,8 @@ export function DartboardHeatmap({ hitCounts, detailedDarts, label = "Тепло
   return <section className="dartboard-heatmap"><svg viewBox="0 0 200 200" role="img" aria-label={label}>
     <circle cx="100" cy="100" r="74" className="board-edge" />
     {regions.map((region) => <path key={region.id} d={region.path} fill={fill(region.key)} tabIndex={0} onFocus={() => setActive(region.key)} onBlur={() => setActive(undefined)} onPointerEnter={() => setActive(region.key)} onPointerLeave={() => setActive(undefined)}><title>{describe(region.key)}</title></path>)}
-    <circle cx="100" cy="100" r="14" fill={fill("25")} tabIndex={0} onFocus={() => setActive("25")} onPointerEnter={() => setActive("25")}><title>{describe("25")}</title></circle>
-    <circle cx="100" cy="100" r="6" fill={fill("Bull")} tabIndex={0} onFocus={() => setActive("Bull")} onPointerEnter={() => setActive("Bull")}><title>{describe("Bull")}</title></circle>
+    <circle cx="100" cy="100" r="14" fill={fill("25")} tabIndex={0} onFocus={() => setActive("25")} onBlur={() => setActive(undefined)} onPointerEnter={() => setActive("25")} onPointerLeave={() => setActive(undefined)}><title>{describe("25")}</title></circle>
+    <circle cx="100" cy="100" r="6" fill={fill("Bull")} tabIndex={0} onFocus={() => setActive("Bull")} onBlur={() => setActive(undefined)} onPointerEnter={() => setActive("Bull")} onPointerLeave={() => setActive(undefined)}><title>{describe("Bull")}</title></circle>
     {order.map((number, index) => { const [x,y]=polar(84,index*18); return <text key={number} x={x} y={y} textAnchor="middle" dominantBaseline="middle">{number}</text>; })}
   </svg><div className="heatmap-caption" aria-live="polite"><strong>{active ? describe(active) : "Наведите или нажмите на сектор"}</strong><span>Карта построена по {detailedDarts} детализированным броскам · промахов: {hitCounts.MISS ?? 0}</span></div></section>;
 }

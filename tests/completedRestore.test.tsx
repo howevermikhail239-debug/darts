@@ -20,7 +20,8 @@ describe("completed active match restore", () => {
     const session = new GameSession(near, services.matches, () => "visit", () => "2026-09-07T12:01:00.000Z");
     await session.record(numberThrow(20, 2)); await session.confirm();
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Продолжить" }));
+    // DATA-3: у завершённого матча карточка возобновления открывает итоги, а не «продолжает» игру.
+    fireEvent.click(await screen.findByRole("button", { name: "Открыть итоги" }));
     expect(await screen.findByRole("heading", { name: "Михаил победил" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Отменить предыдущий подход" }));
     expect(await screen.findByText("Предыдущий подход отменён.")).toBeInTheDocument();

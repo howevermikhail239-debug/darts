@@ -151,6 +151,22 @@ describe("X01 draw (DOM-2)", () => {
 });
 
 describe("Limited X01 finishes the round (DOM-4)", () => {
+  it("plays the current round out and stops there, even with visits left in the format", async () => {
+    const base = createMatch("mid-round", ["a", "b", "c"], { mode: "x01", format: { kind: "limited", visitsPerPlayer: 3 }, startingPlayerIndex: 0 }, clock());
+    if (base.state.kind !== "x01") throw new Error("test setup");
+    const { session: game } = session({ ...base, state: { ...base.state, remaining: { a: 60, b: 501, c: 501 } } });
+    await visitOf(game, numberThrow(20, 3)); // a checks out on visit 1 of 3
+    expect(game.snapshot().match).toMatchObject({ status: "in_progress", currentPlayerIndex: 1 });
+    await visitOf(game, numberThrow(20, 1)); // b finishes the round
+    expect(game.snapshot().match).toMatchObject({ status: "in_progress", currentPlayerIndex: 2 });
+    await visitOf(game, numberThrow(20, 1)); // c finishes the round
+    const match = game.snapshot().match;
+    expect(match).toMatchObject({ status: "completed", winnerId: "a" });
+    expect(match.state).toMatchObject({ visitsCompleted: { a: 1, b: 1, c: 1 } });
+    expect(match.confirmedVisits.map((visit) => visit.playerId)).toEqual(["a", "b", "c"]);
+    expect(match.confirmedVisits[0]).toMatchObject({ result: "match_won" });
+  });
+
   it("lets both zero finishers share the round and go to a tie-break", async () => {
     const base = createMatch("both-zero", ["a", "b"], { mode: "x01", format: { kind: "limited", visitsPerPlayer: 1 }, startingPlayerIndex: 0 }, clock());
     if (base.state.kind !== "x01") throw new Error("test setup");

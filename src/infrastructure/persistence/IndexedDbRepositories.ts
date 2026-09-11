@@ -1,103 +1,157 @@
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { openDB, type DBSchema, type IDBPDatabase, type IDBPTransaction, type StoreNames } from "idb";
 import type { Match, Player } from "../../domain/match/models";
+import { isStoredMatch, migrateMatch } from "../../domain/match/validation";
 import type {
+  ActiveMatchIssue,
   ActiveMatchRecord,
   ActiveVisitDraft,
+  ExternalActiveMatchChange,
   MatchRepository,
   PlayerRepository,
   SettingsRepository,
+  SharedMatchState,
   BackupRepository,
   BackupData,
+  BackupCompanyMatch,
 } from "../../application/ports/repositories";
 import { emptyDraft, type VisitDraft } from "../../domain/match/VisitDraft";
-import { scoreOf, type DartThrow } from "../../domain/darts/DartThrow";
+import { type DartThrow } from "../../domain/darts/DartThrow";
 import { isReachableThreeDartScore } from '../../domain/match/aggregateScore';
 import type { SharedCompany } from '../../application/ports/companyGateway';
 import type { LastSetupRepository, LastSetupTemplate } from '../../application/LastSetup';
+import { tabChannel } from '../TabChannel';
+
+const DB_NAME = "dart-scorekeeper";
+export const DB_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSION = 3;
+export const BLOCKED_MESSAGE = "Закройте другие вкладки приложения: они мешают обновить локальную базу данных.";
+export const BLOCKING_MESSAGE = "Приложение открыто в другой вкладке и обновляет локальную базу. Обновите эту страницу.";
+export const TERMINATED_MESSAGE = "Соединение с локальной базой данных было прервано браузером.";
+
+export type CompanyMatchRow = Readonly<{
+  token: string;
+  matchId: string;
+  match: Match;
+  state: SharedMatchState;
+  reason?: string;
+  attempts?: number;
+  failedAt?: string;
+}>;
+type CompanyPlayersRow = Readonly<{ token: string; players: readonly Player[] }>;
+type DeletedMatchRow = Readonly<{ token: string; matchId: string; deletedAt: string }>;
 
 interface DartsDb extends DBSchema {
-  matches: { key: string; value: Match };
+  matches: { key: string; value: Match; indexes: { byCreatedAt: string } };
   players: { key: string; value: Player };
   meta: { key: string; value: unknown };
+  companies: { key: string; value: SharedCompany };
+  companyPlayers: { key: string; value: CompanyPlayersRow };
+  companyMatches: { key: [string, string]; value: CompanyMatchRow; indexes: { byToken: string; byTokenState: [string, string] } };
+  deletedMatches: { key: [string, string]; value: DeletedMatchRow };
 }
+
+type UpgradeTransaction = IDBPTransaction<DartsDb, StoreNames<DartsDb>[], "versionchange">;
+
+type StorageNotice = Readonly<{ kind: "blocked" | "blocking" | "terminated"; message: string }>;
+const noticeListeners = new Set<(notice: StorageNotice) => void>();
+/** Подписка интерфейса на сообщения хранилища («закройте другие вкладки» и т. п.). */
+export function onStorageNotice(listener: (notice: StorageNotice) => void): () => void {
+  noticeListeners.add(listener);
+  return () => noticeListeners.delete(listener);
+}
+function notify(kind: StorageNotice["kind"], message: string): void {
+  for (const listener of [...noticeListeners]) listener({ kind, message });
+}
+
+/** Перенос записей компании из свалки `meta` в отдельные стор-ы. Идемпотентен. */
+async function migrateMetaRows(transaction: UpgradeTransaction): Promise<void> {
+  const meta = transaction.objectStore("meta");
+  const companies = transaction.objectStore("companies");
+  const companyPlayers = transaction.objectStore("companyPlayers");
+  const companyMatches = transaction.objectStore("companyMatches");
+  for (const rawKey of await meta.getAllKeys()) {
+    const key = String(rawKey);
+    if (key.startsWith("company:")) {
+      const value = await meta.get(rawKey);
+      if (isRecord(value) && isString(value.token) && typeof value.name === "string" && isString(value.createdAt))
+        await companies.put({ token: value.token, name: value.name, createdAt: value.createdAt });
+      await meta.delete(rawKey);
+    } else if (key.startsWith("players:")) {
+      const token = key.slice("players:".length);
+      const value = await meta.get(rawKey);
+      if (isString(token) && Array.isArray(value))
+        await companyPlayers.put({ token, players: value.filter(isPlayer) });
+      await meta.delete(rawKey);
+    } else if (key.startsWith("match:")) {
+      const value = await meta.get(rawKey);
+      const token = isRecord(value) && isString(value.token) ? value.token : key.slice("match:".length).split(":")[0];
+      const match = isRecord(value) ? value.match : undefined;
+      const state = isRecord(value) && isSharedMatchState(value.state) ? value.state : "pending";
+      if (isString(token) && isRecord(match) && isString(match.id))
+        await companyMatches.put({ token, matchId: match.id, match: match as unknown as Match, state });
+      await meta.delete(rawKey);
+    }
+  }
+}
+
+function upgrade(database: IDBPDatabase<DartsDb>, oldVersion: number, _newVersion: number | null, transaction: UpgradeTransaction): void {
+  if (!database.objectStoreNames.contains("matches")) database.createObjectStore("matches", { keyPath: "id" });
+  if (!database.objectStoreNames.contains("players")) database.createObjectStore("players", { keyPath: "id" });
+  if (!database.objectStoreNames.contains("meta")) database.createObjectStore("meta");
+  const matches = transaction.objectStore("matches");
+  if (!matches.indexNames.contains("byCreatedAt")) matches.createIndex("byCreatedAt", "createdAt");
+  if (!database.objectStoreNames.contains("companies")) database.createObjectStore("companies", { keyPath: "token" });
+  if (!database.objectStoreNames.contains("companyPlayers")) database.createObjectStore("companyPlayers", { keyPath: "token" });
+  if (!database.objectStoreNames.contains("companyMatches")) {
+    const store = database.createObjectStore("companyMatches", { keyPath: ["token", "matchId"] });
+    store.createIndex("byToken", "token");
+    store.createIndex("byTokenState", ["token", "state"]);
+  }
+  if (!database.objectStoreNames.contains("deletedMatches")) database.createObjectStore("deletedMatches", { keyPath: ["token", "matchId"] });
+  if (oldVersion > 0 && oldVersion < 2) void migrateMetaRows(transaction);
+}
+
 let database: Promise<IDBPDatabase<DartsDb>> | undefined;
-const db = (): Promise<IDBPDatabase<DartsDb>> =>
-  (database ??= openDB<DartsDb>("dart-scorekeeper", 1, {
-    upgrade(store) {
-      if (!store.objectStoreNames.contains("matches"))
-        store.createObjectStore("matches", { keyPath: "id" });
-      if (!store.objectStoreNames.contains("players"))
-        store.createObjectStore("players", { keyPath: "id" });
-      if (!store.objectStoreNames.contains("meta"))
-        store.createObjectStore("meta");
-    },
-  }));
+let connection: IDBPDatabase<DartsDb> | undefined;
+const db = (): Promise<IDBPDatabase<DartsDb>> => {
+  if (!database) {
+    database = openDB<DartsDb>(DB_NAME, DB_VERSION, {
+      upgrade,
+      blocked() { notify("blocked", BLOCKED_MESSAGE); },
+      blocking() {
+        // Другая вкладка обновляет схему: освобождаем соединение, иначе она зависнет навсегда.
+        notify("blocking", BLOCKING_MESSAGE);
+        connection?.close();
+        connection = undefined;
+        database = undefined;
+      },
+      terminated() {
+        notify("terminated", TERMINATED_MESSAGE);
+        connection = undefined;
+        database = undefined;
+      },
+    })
+      .then((opened) => { connection = opened; return opened; })
+      // Отклонённый промис нельзя кэшировать: одна помеха иначе выводит хранилище из строя навсегда.
+      .catch((error: unknown) => { database = undefined; connection = undefined; throw error; });
+  }
+  return database;
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const isString = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 const isInteger = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && Number.isInteger(value);
-const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
+const isSharedMatchState = (value: unknown): value is SharedMatchState =>
+  value === "pending" || value === "synced" || value === "error" || value === "rejected";
 const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => Object.keys(value).every((key) => keys.includes(key));
+/** Единственный валидатор матча живёт в домене; здесь он только переиспользуется. */
+const isMatch = isStoredMatch;
 function isDart(value: unknown): value is DartThrow {
   if (!isRecord(value) || !isString(value.kind)) return false;
   if (["miss", "bull", "outer_bull"].includes(value.kind)) return hasOnlyKeys(value, ["kind"]);
   return value.kind === "number" && hasOnlyKeys(value, ["kind", "segment", "multiplier"])
     && isInteger(value.segment) && value.segment >= 1 && value.segment <= 20
     && (value.multiplier === 1 || value.multiplier === 2 || value.multiplier === 3);
-}
-function isPlayerNumberRecord(value: unknown, players: readonly string[], minimum: number): boolean {
-  return isRecord(value) && players.every(playerId => {
-    const score = value[playerId];
-    return isInteger(score) && score >= minimum;
-  });
-}
-function isVisitContext(value: unknown, players: readonly string[]): boolean {
-  return isRecord(value) && isPlayerNumberRecord(value.scores, players, 0)
-    && isInteger(value.currentPlayerIndex) && value.currentPlayerIndex >= 0 && value.currentPlayerIndex < players.length;
-}
-function isVisit(value: unknown, matchId: string, players: readonly string[]): boolean {
-  if (!isRecord(value) || !isString(value.id) || value.matchId !== matchId || !isString(value.playerId) || !players.includes(value.playerId)
-    || !isInteger(value.visitIndex) || value.visitIndex < 0 || !isInteger(value.physicalDartsUsed) || !isInteger(value.rawScore) || value.rawScore < 0
-    || !isInteger(value.awardedScore) || value.awardedScore < 0 || !isVisitContext(value.before, players) || !isVisitContext(value.after, players)
-    || !["scored", "bust", "match_won", "tie_pending"].includes(String(value.result)) || !isString(value.timestamp)) return false;
-  if (value.inputKind === 'aggregate') return value.physicalDartsUsed === 3 && isInteger(value.aggregateScore)
-    && value.aggregateScore === value.rawScore && isReachableThreeDartScore(value.aggregateScore)
-    && value.darts === undefined;
-  return (value.inputKind === undefined || value.inputKind === 'detailed') && Array.isArray(value.darts)
-    && value.darts.length <= 3 && value.darts.every(isDart) && value.physicalDartsUsed === value.darts.length
-    && value.rawScore === value.darts.reduce((total, dart) => total + scoreOf(dart), 0);
-}
-function isX01Phase(value: unknown, players: readonly string[]): boolean {
-  if (!isRecord(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "regulation") return true;
-  if (value.kind !== "awaiting_tie_break" && value.kind !== "tie_break") return false;
-  const playerIds = value.playerIds;
-  if (!isStringArray(playerIds) || playerIds.length < 2 || new Set(playerIds).size !== playerIds.length || !playerIds.every(id => players.includes(id)) || !Number.isInteger(value.round) || Number(value.round) < 1) return false;
-  if (value.kind === "awaiting_tie_break") return hasOnlyKeys(value, ["kind", "playerIds", "round"]);
-  return isStringArray(value.completedPlayerIds) && new Set(value.completedPlayerIds).size === value.completedPlayerIds.length
-    && value.completedPlayerIds.every(id => playerIds.includes(id)) && isRecord(value.roundScores)
-    && Object.entries(value.roundScores).every(([id, score]) => playerIds.includes(id) && isInteger(score) && score >= 0)
-    && hasOnlyKeys(value, ["kind", "playerIds", "completedPlayerIds", "roundScores", "round"]);
-}
-function isFixedVisitsPhase(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  if (value.kind === "regulation") return hasOnlyKeys(value, ["kind"]);
-  return ["awaiting_tie_decision", "extra_round", "completed_draw"].includes(String(value.kind))
-    && isInteger(value.round) && value.round >= 1
-    && hasOnlyKeys(value, ["kind", "round"]);
-}
-export function isMatch(value: unknown): value is Match {
-  if (!isRecord(value) || !isString(value.id) || !isString(value.createdAt) || !["in_progress","completed","abandoned"].includes(String(value.status)) || !isStringArray(value.players) || value.players.length < 2 || new Set(value.players).size !== value.players.length || !isInteger(value.startingPlayerIndex) || value.startingPlayerIndex < 0 || value.startingPlayerIndex >= value.players.length || !isInteger(value.currentPlayerIndex) || value.currentPlayerIndex < 0 || value.currentPlayerIndex >= value.players.length || !isRecord(value.participantNames) || !Array.isArray(value.confirmedVisits) || !isRecord(value.state)) return false;
-  const matchId = value.id, players = value.players, participantNames = value.participantNames;
-  if (!players.every(id => isString(participantNames[id]))) return false;
-  if (value.winnerId !== undefined && (!isString(value.winnerId) || !players.includes(value.winnerId))) return false;
-  if (value.status !== "in_progress" && !isString(value.completedAt)) return false;
-  if (!value.confirmedVisits.every((visit) => isVisit(visit, matchId, players))) return false;
-  if (value.state.kind === "x01") {
-    if ((value.state.startingScore !== 301 && value.state.startingScore !== 501 && value.state.startingScore !== 701) || (value.state.outRule !== 'straight' && value.state.outRule !== 'double') || !isRecord(value.state.format) || !isPlayerNumberRecord(value.state.remaining, value.players, 0) || !isPlayerNumberRecord(value.state.visitsCompleted, value.players, 0) || !isX01Phase(value.state.phase, value.players)) return false;
-    return value.state.format.kind === "unlimited" || (value.state.format.kind === "limited" && Number.isInteger(value.state.format.visitsPerPlayer) && Number(value.state.format.visitsPerPlayer) >= 1 && Number(value.state.format.visitsPerPlayer) <= 999);
-  }
-  return value.state.kind === "fixed_visits" && isInteger(value.state.visitsPerPlayer) && value.state.visitsPerPlayer >= 1 && isPlayerNumberRecord(value.state.totals, value.players, 0) && isPlayerNumberRecord(value.state.regulationCompleted, value.players, 0) && isInteger(value.state.extraRoundsCompleted) && value.state.extraRoundsCompleted >= 0 && isFixedVisitsPhase(value.state.phase);
 }
 function isPlayer(value: unknown): value is Player {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.createdAt)
@@ -126,6 +180,7 @@ function isActiveDraft(value: unknown, match: Match): value is ActiveVisitDraft 
 }
 type StoredActive = Readonly<{
   schemaVersion?: number;
+  revision?: number;
   current: Match;
   previous?: Match;
   draft?: unknown;
@@ -134,16 +189,6 @@ type StoredActive = Readonly<{
 function isActiveMatchEnvelope(value: unknown): value is StoredActive {
   return isRecord(value) && isMatch(value.current) && (value.previous === undefined || isMatch(value.previous));
 }
-function migrateMatch(value: unknown): unknown {
-  if (!isRecord(value) || !isRecord(value.state)) return value;
-  const state = value.state.kind === 'x01'
-    ? { ...value.state, startingScore: value.state.startingScore ?? 501, outRule: value.state.outRule ?? 'straight' }
-    : value.state;
-  const confirmedVisits = Array.isArray(value.confirmedVisits)
-    ? value.confirmedVisits.map((visit) => isRecord(visit) && visit.inputKind === undefined ? { ...visit, inputKind: 'detailed' } : visit)
-    : value.confirmedVisits;
-  return { ...value, state, confirmedVisits };
-}
 function migrateActive(value: unknown): unknown {
   if (!isRecord(value)) return value;
   return { ...value, current: migrateMatch(value.current), ...(value.previous !== undefined ? { previous: migrateMatch(value.previous) } : {}) };
@@ -151,25 +196,84 @@ function migrateActive(value: unknown): unknown {
 function emptyActiveDraft(match: Match): ActiveVisitDraft {
   return { playerId: match.players[match.currentPlayerIndex]!, draft: emptyDraft() };
 }
+const revisionOf = (value: unknown): number =>
+  isRecord(value) && isInteger(value.revision) && value.revision >= 0 ? value.revision : 0;
+
+/** Активный матч изменён другой вкладкой: запись отклонена, чтобы не затереть чужой прогресс. */
+export class ActiveMatchConflictError extends Error {
+  readonly expectedRevision: number | undefined;
+  readonly actualRevision: number;
+  constructor(expectedRevision: number | undefined, actualRevision: number) {
+    super("Матч изменён в другой вкладке приложения. Обновите страницу, чтобы продолжить.");
+    this.name = "ActiveMatchConflictError";
+    this.expectedRevision = expectedRevision;
+    this.actualRevision = actualRevision;
+  }
+}
 
 export class IndexedDbMatchRepository implements MatchRepository {
+  /** Ревизия, которую эта вкладка считает актуальной. Отслеживается внутри репозитория,
+   *  поэтому сигнатура порта и вызывающий код (GameSession) остаются неизменными. */
+  private revision: number | undefined;
+  private issue: ActiveMatchIssue | undefined;
+  private queue: Promise<unknown> = Promise.resolve();
+
+  /** Признак для интерфейса: запись создана более новой версией приложения. */
+  activeMatchIssue(): ActiveMatchIssue | undefined { return this.issue; }
+  /** Подписка на изменения активного матча в других вкладках. */
+  onExternalChange(listener: (event: ExternalActiveMatchChange) => void): () => void {
+    return tabChannel.subscribe(listener);
+  }
+  /** Ревизия активного матча, известная этой вкладке (для диагностики и тестов). */
+  currentRevision(): number | undefined { return this.revision; }
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(operation, operation);
+    this.queue = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
   async saveActive(record: ActiveMatchRecord): Promise<void> {
-    await (await db()).put(
-      "meta",
-      structuredClone({
-        schemaVersion: 3,
-        current: record.current,
-        ...(record.previous ? { previous: record.previous } : {}),
-      draft: record.draft,
-        ...(record.companyToken ? { companyToken: record.companyToken } : {}),
-      }),
-      "activeMatch",
-    );
+    await this.serialize(async () => {
+      const store = (await db()).transaction("meta", "readwrite");
+      const stored = await store.objectStore("meta").get("activeMatch");
+      const actual = revisionOf(stored);
+      if (stored !== undefined && this.revision !== undefined && actual !== this.revision) {
+        store.abort();
+        await store.done.catch(() => undefined);
+        throw new ActiveMatchConflictError(this.revision, actual);
+      }
+      const next = actual + 1;
+      await store.objectStore("meta").put(
+        structuredClone({
+          schemaVersion: SUPPORTED_SCHEMA_VERSION,
+          revision: next,
+          current: record.current,
+          ...(record.previous ? { previous: record.previous } : {}),
+          draft: record.draft,
+          ...(record.companyToken ? { companyToken: record.companyToken } : {}),
+        }),
+        "activeMatch",
+      );
+      await store.done;
+      this.revision = next;
+      tabChannel.post({ kind: "saved", revision: next, matchId: record.current.id });
+    });
   }
   async loadActive(): Promise<ActiveMatchRecord | undefined> {
+    this.issue = undefined;
     const stored = await (await db()).get("meta", "activeMatch");
-    if (stored === undefined) return undefined;
-    if (!isRecord(stored) || (stored.schemaVersion !== undefined && stored.schemaVersion !== 1 && stored.schemaVersion !== 2 && stored.schemaVersion !== 3))
+    if (stored === undefined) { this.revision = undefined; return undefined; }
+    this.revision = revisionOf(stored);
+    if (!isRecord(stored)) throw new Error("Сохранённый матч повреждён. Сбросьте локальные данные.");
+    const schemaVersion = stored.schemaVersion;
+    if (isInteger(schemaVersion) && schemaVersion > SUPPORTED_SCHEMA_VERSION) {
+      // Откат на прежнюю версию клиента не должен предлагать стереть данные: история цела,
+      // активный матч просто не восстанавливается.
+      this.issue = "future_version";
+      return undefined;
+    }
+    if (schemaVersion !== undefined && schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3)
       throw new Error("Сохранённый матч имеет неподдерживаемую версию.");
     const value = migrateActive(stored);
     if (!isActiveMatchEnvelope(value))
@@ -177,37 +281,55 @@ export class IndexedDbMatchRepository implements MatchRepository {
     const base = value.previous === undefined
       ? { current: value.current }
       : { current: value.current, previous: value.previous };
+    const revision = this.revision;
     if ((value.schemaVersion === 2 || value.schemaVersion === 3) && isActiveDraft(value.draft, value.current))
-      return { ...base, draft: value.draft, ...(isString(value.companyToken) ? { companyToken: value.companyToken } : {}) };
+      return { ...base, draft: value.draft, revision, ...(isString(value.companyToken) ? { companyToken: value.companyToken } : {}) };
     return {
       ...base,
       draft: emptyActiveDraft(value.current),
+      revision,
       draftRecovery: value.schemaVersion === 2 || value.schemaVersion === 3 ? "discarded_corrupt" : "missing_legacy",
     };
   }
   async archiveAndClearActive(match: Match): Promise<void> {
-    const database = await db();
-    const transaction = database.transaction(["matches", "meta"], "readwrite");
-    await transaction.objectStore("matches").put(structuredClone(match));
-    const active = await transaction.objectStore('meta').get('activeMatch') as StoredActive | undefined;
-    if (active?.companyToken && match.status !== 'in_progress') {
-      const key = `match:${active.companyToken}:${match.id}`;
-      await transaction.objectStore('meta').put(structuredClone({ token: active.companyToken, match, state: 'pending' }), key);
-    }
-    await transaction.objectStore("meta").delete("activeMatch");
-    await transaction.done;
+    await this.serialize(async () => {
+      const transaction = (await db()).transaction(["matches", "meta", "companyMatches"], "readwrite");
+      await transaction.objectStore("matches").put(structuredClone(match));
+      const active = await transaction.objectStore('meta').get('activeMatch') as StoredActive | undefined;
+      if (active?.companyToken && match.status !== 'in_progress')
+        await transaction.objectStore('companyMatches').put(structuredClone({
+          token: active.companyToken, matchId: match.id, match, state: 'pending' as const,
+        }));
+      await transaction.objectStore("meta").delete("activeMatch");
+      await transaction.done;
+      this.revision = undefined;
+      tabChannel.post({ kind: "cleared", revision: 0, matchId: match.id });
+    });
   }
-  async listHistory(): Promise<readonly Match[]> {
-    const values = (await (await db()).getAll("matches")).map(migrateMatch);
-    return values
-      .filter(isMatch)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  /** История по индексу byCreatedAt (по убыванию). `limit` необязателен: по умолчанию вся история. */
+  async listHistory(limit?: number): Promise<readonly Match[]> {
+    return (await this.readHistory(limit)).matches;
+  }
+  /** То же, но с числом пропущенных повреждённых записей — интерфейс может об этом сообщить. */
+  async readHistory(limit?: number): Promise<{ matches: readonly Match[]; skipped: number }> {
+    const matches: Match[] = [];
+    let skipped = 0;
+    let cursor = await (await db()).transaction("matches").store.index("byCreatedAt").openCursor(null, "prev");
+    while (cursor) {
+      const migrated = migrateMatch(cursor.value);
+      if (isMatch(migrated)) {
+        matches.push(migrated);
+        if (limit !== undefined && matches.length >= limit) break;
+      } else skipped += 1;
+      cursor = await cursor.continue();
+    }
+    return { matches, skipped };
   }
   async deleteHistory(matchId: string): Promise<boolean> {
-    const database = await db();
-    const existing = await database.get("matches", matchId);
+    const connected = await db();
+    const existing = await connected.get("matches", matchId);
     if (!existing) return false;
-    await database.delete("matches", matchId);
+    await connected.delete("matches", matchId);
     return true;
   }
 }
@@ -221,45 +343,114 @@ export class IndexedDbPlayerRepository implements PlayerRepository {
     await (await db()).put("players", structuredClone(player));
   }
   async delete(playerId: string): Promise<boolean> {
-    const database = await db();
-    const existing = await database.get("players", playerId);
+    const connected = await db();
+    const existing = await connected.get("players", playerId);
     if (!existing) return false;
-    await database.delete("players", playerId);
+    await connected.delete("players", playerId);
     return true;
   }
 }
 
-export type SharedMatchCache = Readonly<{ token: string; match: Match; state: 'pending' | 'synced' | 'error' }>;
+export type SharedMatchCache = Readonly<{
+  token: string;
+  matchId: string;
+  match: Match;
+  state: SharedMatchState;
+  reason?: string;
+  attempts?: number;
+  failedAt?: string;
+}>;
+export type SharedMatchDetails = Readonly<{ reason?: string; attempts?: number; failedAt?: string }>;
+
+const toCache = (row: CompanyMatchRow): SharedMatchCache | undefined => {
+  const match = migrateMatch(row.match);
+  if (!isMatch(match) || !isSharedMatchState(row.state)) return undefined;
+  return {
+    token: row.token, matchId: row.matchId, match, state: row.state,
+    ...(isString(row.reason) ? { reason: row.reason } : {}),
+    ...(isInteger(row.attempts) ? { attempts: row.attempts } : {}),
+    ...(isString(row.failedAt) ? { failedAt: row.failedAt } : {}),
+  };
+};
+
 export class IndexedDbSharedRepository {
   async companies(): Promise<readonly SharedCompany[]> {
-    return (await (await db()).getAll('meta')).filter((x): x is SharedCompany => isRecord(x) && x.kind === 'company' && isString(x.token) && typeof x.name === 'string' && isString(x.createdAt));
+    return (await (await db()).getAll('companies'))
+      .filter((value): value is SharedCompany => isRecord(value) && isString(value.token) && typeof value.name === 'string' && isString(value.createdAt));
   }
-  async saveCompany(company: SharedCompany): Promise<void> { await (await db()).put('meta', { ...company, kind: 'company' }, `company:${company.token}`); }
+  async saveCompany(company: SharedCompany): Promise<void> {
+    await (await db()).put('companies', { token: company.token, name: company.name, createdAt: company.createdAt });
+  }
   async players(token: string): Promise<readonly Player[]> {
-    const value = await (await db()).get('meta', `players:${token}`);
-    return Array.isArray(value) ? value.filter(isPlayer) : [];
+    const row = await (await db()).get('companyPlayers', token);
+    return Array.isArray(row?.players) ? row.players.filter(isPlayer) : [];
   }
-  async savePlayers(token: string, players: readonly Player[]): Promise<void> { await (await db()).put('meta', structuredClone(players), `players:${token}`); }
+  async savePlayers(token: string, players: readonly Player[]): Promise<void> {
+    await (await db()).put('companyPlayers', structuredClone({ token, players: [...players] }));
+  }
+  /** Чтение-изменение-запись в ОДНОЙ транзакции: иначе параллельные мутации теряют игроков. */
+  async updatePlayers(token: string, mutate: (current: readonly Player[]) => readonly Player[]): Promise<readonly Player[]> {
+    const transaction = (await db()).transaction('companyPlayers', 'readwrite');
+    const row = await transaction.store.get(token);
+    const current = Array.isArray(row?.players) ? row.players.filter(isPlayer) : [];
+    const next = [...mutate(current)];
+    await transaction.store.put(structuredClone({ token, players: next }));
+    await transaction.done;
+    return next;
+  }
   async matches(token: string): Promise<readonly SharedMatchCache[]> {
-    const all = await (await db()).getAll('meta');
-    return all.filter((x): x is SharedMatchCache => isRecord(x) && x.token === token && isMatch(x.match) && ['pending','synced','error'].includes(String(x.state)));
+    const rows = await (await db()).getAllFromIndex('companyMatches', 'byToken', IDBKeyRange.only(token));
+    return rows.map(toCache).filter((row): row is SharedMatchCache => row !== undefined);
   }
   async mergeRemote(token: string, matches: readonly Match[]): Promise<void> {
-    const database = await db(); const tx = database.transaction('meta', 'readwrite');
+    const transaction = (await db()).transaction(['companyMatches', 'deletedMatches'], 'readwrite');
+    const cached = transaction.objectStore('companyMatches');
+    const tombstones = transaction.objectStore('deletedMatches');
     const remoteIds = new Set(matches.map((match) => match.id));
-    for (const key of await tx.store.getAllKeys()) {
-      const existing = await tx.store.get(key) as SharedMatchCache | undefined;
-      if (isRecord(existing) && existing.token === token && isRecord(existing.match) && existing.state === 'synced' && !remoteIds.has(String(existing.match.id))) await tx.store.delete(key);
+    const deletedIds = new Set((await tombstones.getAll(IDBKeyRange.bound([token, ''], [token, '￿']))).map((row) => row.matchId));
+    let cursor = await cached.index('byToken').openCursor(IDBKeyRange.only(token));
+    while (cursor) {
+      const row = cursor.value;
+      const removedRemotely = !remoteIds.has(row.matchId) && row.state === 'synced';
+      if (removedRemotely || deletedIds.has(row.matchId)) await cursor.delete();
+      cursor = await cursor.continue();
     }
     for (const match of matches) {
-      if (!isMatch(match) || match.status === 'in_progress') continue;
-      const key = `match:${token}:${match.id}`; const existing = await tx.store.get(key) as SharedMatchCache | undefined;
-      await tx.store.put({ token, match: structuredClone(match), state: existing?.state === 'pending' ? 'pending' : 'synced' }, key);
-    } await tx.done;
+      if (!isMatch(match) || match.status === 'in_progress' || deletedIds.has(match.id)) continue;
+      const existing = await cached.get([token, match.id]);
+      await cached.put(structuredClone({
+        token, matchId: match.id, match,
+        state: existing?.state === 'pending' ? 'pending' as const : 'synced' as const,
+      }));
+    }
+    // Удаление подтверждено сервером — надгробие больше не нужно.
+    for (const matchId of deletedIds) if (!remoteIds.has(matchId)) await tombstones.delete([token, matchId]);
+    await transaction.done;
   }
-  async setState(token: string, matchId: string, state: SharedMatchCache['state']): Promise<void> {
-    const database = await db(); const key = `match:${token}:${matchId}`; const current = await database.get('meta', key) as SharedMatchCache | undefined;
-    if (current) await database.put('meta', { ...current, state }, key);
+  async setState(token: string, matchId: string, state: SharedMatchState, details: SharedMatchDetails = {}): Promise<void> {
+    const transaction = (await db()).transaction('companyMatches', 'readwrite');
+    const current = await transaction.store.get([token, matchId]);
+    if (current) await transaction.store.put(structuredClone({
+      ...current,
+      state,
+      ...(details.reason !== undefined ? { reason: details.reason } : {}),
+      ...(details.attempts !== undefined ? { attempts: details.attempts } : {}),
+      ...(details.failedAt !== undefined ? { failedAt: details.failedAt } : {}),
+    }));
+    await transaction.done;
+  }
+  /** Явное удаление матча компании: обе локальные копии плюс надгробие против воскрешения. */
+  async forgetMatch(token: string, matchId: string, deletedAt: string = new Date().toISOString()): Promise<void> {
+    const transaction = (await db()).transaction(['companyMatches', 'deletedMatches', 'matches'], 'readwrite');
+    await transaction.objectStore('companyMatches').delete([token, matchId]);
+    await transaction.objectStore('deletedMatches').put({ token, matchId, deletedAt });
+    await transaction.objectStore('matches').delete(matchId);
+    await transaction.done;
+  }
+  /** Идентификаторы явно удалённых матчей компании (надгробия). */
+  async deletedMatchIds(token: string): Promise<readonly string[]> {
+    const rows = await (await db()).getAll('deletedMatches', IDBKeyRange.bound([token, ''], [token, '￿']));
+    return rows.map((row) => row.matchId);
   }
 }
 export class LocalSettingsRepository implements SettingsRepository {
@@ -283,9 +474,10 @@ export class IndexedDbLastSetupRepository implements LastSetupRepository {
 }
 export class IndexedDbBackupRepository implements BackupRepository {
   async readAll(): Promise<BackupData> {
-    const database = await db();
-    const [players, matches, active, settings] = await Promise.all([
-      database.getAll('players'), database.getAll('matches'), database.get('meta', 'activeMatch'), database.get('meta', 'settings'),
+    const connected = await db();
+    const [players, matches, active, settings, companies, companyPlayerRows, companyMatchRows, metaKeys] = await Promise.all([
+      connected.getAll('players'), connected.getAll('matches'), connected.get('meta', 'activeMatch'), connected.get('meta', 'settings'),
+      connected.getAll('companies'), connected.getAll('companyPlayers'), connected.getAll('companyMatches'), connected.getAllKeys('meta'),
     ]);
     const migratedActive = active === undefined ? undefined : migrateActive(active);
     if (migratedActive !== undefined && !isActiveMatchEnvelope(migratedActive)) throw new Error('Активный матч повреждён.');
@@ -294,9 +486,39 @@ export class IndexedDbBackupRepository implements BackupRepository {
     const activeRecord = migratedActive === undefined ? undefined : (() => {
       const envelope = migratedActive as StoredActive;
       if (!isActiveDraft(envelope.draft, envelope.current)) throw new Error('Активный подход повреждён.');
-      return envelope.previous ? { current: envelope.current, previous: envelope.previous, draft: envelope.draft } : { current: envelope.current, draft: envelope.draft };
+      return {
+        current: envelope.current,
+        ...(envelope.previous ? { previous: envelope.previous } : {}),
+        draft: envelope.draft,
+        ...(isString(envelope.companyToken) ? { companyToken: envelope.companyToken } : {}),
+      };
     })();
-    return { players, matches: validMatches as Match[], ...(activeRecord ? { active: activeRecord } : {}), settings: (settings ?? {}) as Record<string,string> };
+    const lastSetups = (await Promise.all(metaKeys
+      .filter((key) => String(key).startsWith('lastSetup:'))
+      .map(async (key) => {
+        const template = await connected.get('meta', key);
+        return isLastSetup(template) ? { context: String(key).slice('lastSetup:'.length), template } : undefined;
+      }))).filter((row): row is { context: string; template: LastSetupTemplate } => row !== undefined);
+    const companyMatches = companyMatchRows
+      .map((row) => {
+        const match = migrateMatch(row.match);
+        return isMatch(match) && isString(row.token) && isString(row.matchId) && isSharedMatchState(row.state)
+          ? { token: row.token, matchId: row.matchId, match, state: row.state, ...(isString(row.reason) ? { reason: row.reason } : {}) }
+          : undefined;
+      })
+      .filter((row): row is BackupCompanyMatch => row !== undefined);
+    return {
+      players,
+      matches: validMatches as Match[],
+      ...(activeRecord ? { active: activeRecord } : {}),
+      settings: (settings ?? {}) as Record<string, string>,
+      companies: companies.filter((company): company is SharedCompany => isRecord(company) && isString(company.token) && typeof company.name === 'string' && isString(company.createdAt)),
+      companyPlayers: companyPlayerRows
+        .filter((row) => isString(row.token) && Array.isArray(row.players))
+        .map((row) => ({ token: row.token, players: row.players.filter(isPlayer) })),
+      companyMatches,
+      lastSetups,
+    };
   }
   async replaceAll(data: BackupData): Promise<void> {
     if (!isRecord(data) || !Array.isArray(data.players) || !data.players.every(isPlayer) || !Array.isArray(data.matches)) throw new Error('Резервная копия повреждена.');
@@ -305,29 +527,50 @@ export class IndexedDbBackupRepository implements BackupRepository {
     let activeEnvelope: StoredActive | undefined;
     if (data.active !== undefined) {
       if (!isRecord(data.active)) throw new Error('Активный матч в копии повреждён.');
-      const candidate = migrateActive({ schemaVersion: 3, ...data.active });
+      const candidate = migrateActive({ schemaVersion: SUPPORTED_SCHEMA_VERSION, revision: 1, ...data.active });
       if (!isActiveMatchEnvelope(candidate) || !isActiveDraft(candidate.draft, candidate.current)) throw new Error('Активный матч в копии повреждён.');
       activeEnvelope = candidate;
     }
-    const database = await db();
-    const transaction = database.transaction(['players', 'matches', 'meta'], 'readwrite');
+    const companies = (data.companies ?? []).filter((company) => isRecord(company) && isString(company.token) && typeof company.name === 'string' && isString(company.createdAt));
+    const companyPlayers = (data.companyPlayers ?? []).filter((row) => isRecord(row) && isString(row.token) && Array.isArray(row.players));
+    const companyMatches = (data.companyMatches ?? [])
+      .map((row) => isRecord(row) && isString(row.token) && isString(row.matchId) ? { row, match: migrateMatch(row.match) } : undefined)
+      .filter((item): item is { row: BackupCompanyMatch; match: unknown } => item !== undefined && isMatch(item.match));
+    const lastSetups = (data.lastSetups ?? []).filter((row) => isRecord(row) && isString(row.context) && isLastSetup(row.template));
+    const connected = await db();
+    const transaction = connected.transaction(['players', 'matches', 'meta', 'companies', 'companyPlayers', 'companyMatches', 'deletedMatches'], 'readwrite');
     await transaction.objectStore('players').clear();
     await transaction.objectStore('matches').clear();
-    await transaction.objectStore('meta').delete('activeMatch');
-    await transaction.objectStore('meta').put(structuredClone(data.settings), 'settings');
+    await transaction.objectStore('companies').clear();
+    await transaction.objectStore('companyPlayers').clear();
+    await transaction.objectStore('companyMatches').clear();
+    await transaction.objectStore('deletedMatches').clear();
+    const meta = transaction.objectStore('meta');
+    await meta.delete('activeMatch');
+    for (const key of await meta.getAllKeys()) if (String(key).startsWith('lastSetup:')) await meta.delete(key);
+    await meta.put(structuredClone(data.settings), 'settings');
     for (const player of data.players) await transaction.objectStore('players').put(structuredClone(player));
     for (const match of matches as Match[]) await transaction.objectStore('matches').put(structuredClone(match));
-    if (activeEnvelope) await transaction.objectStore('meta').put(structuredClone(activeEnvelope), 'activeMatch');
+    for (const company of companies) await transaction.objectStore('companies').put(structuredClone({ token: company.token, name: company.name, createdAt: company.createdAt }));
+    for (const row of companyPlayers) await transaction.objectStore('companyPlayers').put(structuredClone({ token: row.token, players: row.players.filter(isPlayer) }));
+    for (const { row, match } of companyMatches) await transaction.objectStore('companyMatches').put(structuredClone({
+      token: row.token, matchId: row.matchId, match: match as Match,
+      state: isSharedMatchState(row.state) ? row.state : 'pending' as const,
+      ...(isString(row.reason) ? { reason: row.reason } : {}),
+    }));
+    for (const row of lastSetups) await meta.put(structuredClone(row.template), `lastSetup:${row.context}`);
+    if (activeEnvelope) await meta.put(structuredClone(activeEnvelope), 'activeMatch');
     await transaction.done;
   }
 }
 export async function clearLocalData(): Promise<void> {
   if (database) {
-    (await database).close();
+    await database.then((opened) => opened.close()).catch(() => undefined);
     database = undefined;
+    connection = undefined;
   }
   await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase("dart-scorekeeper");
+    const request = indexedDB.deleteDatabase(DB_NAME);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error("Не удалось закрыть локальную базу данных."));
