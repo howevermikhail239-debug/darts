@@ -26,6 +26,7 @@ import { toSummaryViewModel } from "../game/summaryViewModel";
 import { prepareResultShare } from "../../application/PrepareResultShare";
 import { notationOf } from "../../domain/darts/DartThrow";
 import { currentStreak } from "../../domain/statistics/todaySummary";
+import { userMessage } from "../errors/userMessage";
 type PendingDialog = { title: string; description: string; confirmLabel: string; destructive?: boolean; action: () => void };
 type Props = {
   session: GameSession;
@@ -79,7 +80,7 @@ export function GamePage({
       setMultiplier(1);
     } catch (e) {
       update(session.snapshot());
-      setError(e instanceof Error ? e.message : "Ошибка ввода");
+      setError(userMessage(e));
     }
   };
   const undo = async () => {
@@ -91,7 +92,7 @@ export function GamePage({
       }
       await undoConfirmed(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка");
+      setError(userMessage(e));
     }
   };
   const undoConfirmed = async (discardDraft: boolean) => {
@@ -100,11 +101,11 @@ export function GamePage({
       setSelected(undefined);
       setMultiplier(1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка");
+      setError(userMessage(e));
     }
   };
   const changeInputMode = (mode: "detailed" | "aggregate") => {
-    const apply = (discard: boolean) => void session.setInputMode(mode, discard).then(update).catch(e => setError(e instanceof Error ? e.message : "Ошибка сохранения"));
+    const apply = (discard: boolean) => void session.setInputMode(mode, discard).then(update).catch(e => setError(userMessage(e)));
     if (draftIsEmpty(snapshot.draft)) { apply(false); return; }
     setDialog({ title: "Переключить способ ввода?", description: "Текущий незавершённый подход будет сброшен.", confirmLabel: "Сбросить и переключить", destructive: true, action: () => { setDialog(undefined); apply(true); } });
   };
@@ -124,9 +125,11 @@ export function GamePage({
       }
     } catch (e) {
       update(session.snapshot());
-      setError(e instanceof Error ? e.message : "Ошибка сохранения");
+      setError(userMessage(e));
     }
   };
+  // PERF-5: тяжёлая часть модели — статистика матча — кэшируется по ссылке на матч
+  // внутри `toGameViewModel`, поэтому повторный вызов на рендере дешёвый.
   const view = toGameViewModel(snapshot, players, persistentPlayerIds);
   const undoVisit = snapshot.undoVisit;
   if (view.completed)
@@ -168,7 +171,7 @@ export function GamePage({
         </div>
         <button
           className="text-icon"
-          onClick={() => setDialog({ title: "Прервать матч?", description: "Незавершённый подход не попадёт в историю. Подтверждённые результаты сохранятся как прерванный матч.", confirmLabel: "Прервать матч", destructive: true, action: () => { setDialog(undefined); void session.abandon().then(onClosed).catch((e) => setError(e instanceof Error ? e.message : "Ошибка сохранения")); } })}
+          onClick={() => setDialog({ title: "Прервать матч?", description: "Незавершённый подход не попадёт в историю. Подтверждённые результаты сохранятся как прерванный матч.", confirmLabel: "Прервать матч", destructive: true, action: () => { setDialog(undefined); void session.abandon().then(onClosed).catch((e) => setError(userMessage(e))); } })}
           aria-label={t.abandon}
         >
           ×
@@ -196,7 +199,7 @@ export function GamePage({
           update(session.snapshot());
           void pending.then(update).catch((e) => {
             update(session.snapshot());
-            setError(e instanceof Error ? e.message : "Ошибка сохранения");
+            setError(userMessage(e));
           });
         }}
         onReset={() => {
@@ -208,7 +211,7 @@ export function GamePage({
             setSelected(undefined);
           }).catch((e) => {
             update(session.snapshot());
-            setError(e instanceof Error ? e.message : "Ошибка сохранения");
+            setError(userMessage(e));
           });
         }}
         onConfirm={() => void confirm()}
@@ -221,7 +224,7 @@ export function GamePage({
             className="primary"
             onClick={() =>
               void session.extraRound().then(update).catch((e) =>
-                setError(e instanceof Error ? e.message : "Ошибка сохранения"),
+                setError(userMessage(e)),
               )
             }
           >
@@ -231,7 +234,7 @@ export function GamePage({
               className="secondary"
               onClick={() =>
                 void session.completeDraw().then(update).catch((e) =>
-                  setError(e instanceof Error ? e.message : "Ошибка сохранения"),
+                  setError(userMessage(e)),
                 )
               }
             >
@@ -241,7 +244,7 @@ export function GamePage({
       ) : (
         isDetailedDraft(snapshot.draft)?<DartPad
           multiplier={multiplier}
-          disabled={!view.canAddNextDart && selected === undefined}
+          disabled={snapshot.isConfirming || (!view.canAddNextDart && selected === undefined)}
           onMultiplier={setMultiplier}
           onNumber={(n) => void enter(numberThrow(n, multiplier))}
           onBull={(kind) =>
@@ -311,7 +314,7 @@ function Summary({
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Ошибка сохранения");
+      setError(userMessage(cause));
     } finally {
       setBusy(false);
     }

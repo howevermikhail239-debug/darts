@@ -1047,7 +1047,7 @@ test('Stage 4.5 company rematch preserves three shared ids and History can start
 
 test('Stage 4.5 multiplier preview, confirmed 180 celebration, reduced motion and haptics are progressive', async ({ page }) => {
   await page.addInitScript(() => { const calls: VibratePattern[] = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (pattern: VibratePattern) => { calls.push(pattern); return true; } }); Object.defineProperty(window, '__vibrationCalls', { value: calls }); });
-  await page.goto('/'); await page.getByRole('button', { name: 'Настройки' }).click(); const haptics = page.getByRole('checkbox', { name: /Виброотклик/ }); await expect(haptics).toBeChecked(); await haptics.uncheck(); await expect(haptics).toBeDisabled(); await expect(haptics).toBeEnabled(); await page.reload(); await page.getByRole('button', { name: 'Настройки' }).click(); const restoredHaptics = page.getByRole('checkbox', { name: /Виброотклик/ }); await expect(restoredHaptics).not.toBeChecked(); await restoredHaptics.check(); await expect(restoredHaptics).toBeDisabled(); await expect(restoredHaptics).toBeEnabled();
+  await page.goto('/'); await page.getByRole('button', { name: 'Настройки' }).click(); const haptics = page.getByRole('checkbox', { name: /Виброотклик/ }); await expect(haptics).toBeChecked(); await haptics.uncheck(); await expect(haptics).not.toBeChecked(); await expect(haptics).toBeEnabled(); await page.reload(); await page.getByRole('button', { name: 'Настройки' }).click(); const restoredHaptics = page.getByRole('checkbox', { name: /Виброотклик/ }); await expect(restoredHaptics).not.toBeChecked(); await restoredHaptics.check(); await expect(restoredHaptics).toBeChecked(); await expect(restoredHaptics).toBeEnabled();
   await startOneVisitSeries(page);
   const sector20 = page.getByRole('button', { name: 'Сектор 20, множитель 1' }); await expect(sector20).toHaveText('20');
   await page.getByRole('button', { name: '×2' }).click(); await expect(page.getByRole('button', { name: 'Сектор 20, множитель 2' })).toContainText('40');
@@ -1210,7 +1210,8 @@ test('Stage 4.6 company Last Setup is isolated by company token', async ({ page 
   await page.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Миша' });
   await page.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Саша' });
   await finishOneVisitSeriesFromSetup(page); await page.getByRole('button', { name: 'На главную' }).click();
-  await page.getByRole('button', { name: 'Это устройство' }).click();
+  await page.getByRole('button', { name: 'Выйти из компании' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Выйти из компании' }).click();
   await createCompanyWithPlayers(page, `Клуб B ${Date.now()}`, ['Оля', 'Ира']);
   await page.getByLabel('Выбрать сохранённого игрока 1').selectOption({ label: 'Оля' });
   await page.getByLabel('Выбрать сохранённого игрока 2').selectOption({ label: 'Ира' });

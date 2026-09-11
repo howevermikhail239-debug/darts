@@ -289,13 +289,28 @@ describe("GameSession", () => {
     }
     expect(session.snapshot().match.winnerId).toBe("p0");
   });
-  it("limited 501 ends immediately when a player reaches zero", async () => {
+  it("limited 501 plays the round out after a checkout before awarding the win", async () => {
     const repo = new MemoryRepo();
-    const base = createMatch("early", ["a", "b"], { mode: "x01", format: { kind: "limited", visitsPerPlayer: 20 }, startingPlayerIndex: 0 }, clock());
+    const base = createMatch("early", ["a", "b"], { mode: "x01", format: { kind: "limited", visitsPerPlayer: 1 }, startingPlayerIndex: 0 }, clock());
+    const session = new GameSession(withRemaining(base, 60), repo, id, clock);
+    await session.record(numberThrow(20, 3));
+    expect(session.snapshot().evaluation.status).toBe("match_won");
+    await session.confirm();
+    expect(session.snapshot().match).toMatchObject({ status: "in_progress", currentPlayerIndex: 1 });
+    expect(session.snapshot().match.confirmedVisits[0]).toMatchObject({ result: "tie_pending", awardedScore: 60 });
+    await session.record(miss()); await session.record(miss()); await session.record(miss());
+    await session.confirm();
+    expect(session.snapshot().match).toMatchObject({ status: "completed", winnerId: "a" });
+    expect(session.snapshot().match.confirmedVisits[0]).toMatchObject({ result: "match_won" });
+  });
+  it("unlimited 501 still ends the moment a player reaches zero", async () => {
+    const repo = new MemoryRepo();
+    const base = createMatch("unlimited-zero", ["a", "b"], { mode: "x01", format: { kind: "unlimited" }, startingPlayerIndex: 0 }, clock());
     const session = new GameSession(withRemaining(base, 60), repo, id, clock);
     await session.record(numberThrow(20, 3));
     await session.confirm();
     expect(session.snapshot().match).toMatchObject({ status: "completed", winnerId: "a" });
+    expect(session.snapshot().match.confirmedVisits[0]).toMatchObject({ result: "match_won" });
   });
   it("limited 501 tie-break includes only minimum-remaining leaders and resolves after their full round", async () => {
     const repo = new MemoryRepo();
@@ -452,6 +467,42 @@ describe("GameSession", () => {
     await session.undo(true);
     expect(session.snapshot().draft.darts).toEqual([]);
     expect(session.snapshot().match).toEqual(match);
+  });
+  it("archives a completed match instead of turning it into an abandoned one", async () => {
+    const repo = new MemoryRepo();
+    const match = createMatch("won-then-abandon", ["a", "b"], { mode: "x01", format: { kind: "unlimited" }, startingPlayerIndex: 0 }, clock());
+    const session = new GameSession(withRemaining(match, 50), repo, id, clock);
+    await session.record(bull());
+    await session.confirm();
+    const completedAt = session.snapshot().match.completedAt;
+    const archived = await session.abandon();
+    expect(archived).toMatchObject({ status: "completed", winnerId: "a", completedAt });
+    expect(repo.history).toMatchObject([{ status: "completed", winnerId: "a" }]);
+    expect(repo.active).toBeUndefined();
+  });
+  it("keeps an already abandoned match untouched on a second abandon", async () => {
+    const repo = new MemoryRepo();
+    const match = createMatch("double-abandon", ["a", "b"], { mode: "x01", format: { kind: "unlimited" }, startingPlayerIndex: 0 }, clock());
+    const session = new GameSession(match, repo, id, clock);
+    const first = await session.abandon();
+    const second = await session.abandon();
+    expect(second).toBe(first);
+    expect(repo.history).toHaveLength(1);
+  });
+  it("treats the start of an extra round as an undo point", async () => {
+    const repo = new MemoryRepo();
+    const match = createMatch("extra-undo", ["a", "b"], { mode: "fixed_visits", visitsPerPlayer: 1, startingPlayerIndex: 0 }, clock());
+    const session = new GameSession(match, repo, id, clock);
+    for (let player = 0; player < 2; player += 1) {
+      await session.record(miss()); await session.record(miss()); await session.record(miss());
+      await session.confirm();
+    }
+    const tied = session.snapshot().match;
+    await session.extraRound();
+    expect(session.snapshot().match.state).toMatchObject({ phase: { kind: "extra_round" } });
+    await session.undo();
+    expect(session.snapshot().match).toEqual(tied);
+    expect(session.snapshot().match.confirmedVisits).toHaveLength(2);
   });
   it("removes an unconfirmed draft when abandoning or finalizing", async () => {
     const abandonRepo = new MemoryRepo();

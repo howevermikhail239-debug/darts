@@ -28,6 +28,8 @@ install -d -m 0755 /opt/dart-scorekeeper/releases
 
 install -o root -g root -m 0644 "$artifact_dir/dart-scorekeeper.service" /etc/systemd/system/dart-scorekeeper.service
 install -o root -g root -m 0755 "$artifact_dir/dart-scorekeeper-backup" /usr/local/sbin/dart-scorekeeper-backup
+install -d -m 0755 /usr/local/lib/dart-scorekeeper
+install -o root -g root -m 0644 "$artifact_dir/validate-storage.mjs" /usr/local/lib/dart-scorekeeper/validate-storage.mjs
 install -o root -g root -m 0644 "$artifact_dir/dart-scorekeeper-backup.service" /etc/systemd/system/dart-scorekeeper-backup.service
 install -o root -g root -m 0644 "$artifact_dir/dart-scorekeeper-backup.timer" /etc/systemd/system/dart-scorekeeper-backup.timer
 install -o root -g root -m 0644 "$artifact_dir/99-darts-security.conf" /etc/ssh/sshd_config.d/99-darts-security.conf

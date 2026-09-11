@@ -4,19 +4,10 @@ import { currentPlayerId, type Match, type PlayerId, type Visit, type X01State }
 import type { DraftEvaluation, GameRules } from './GameRules';
 import { isDetailedDraft } from '../match/VisitDraft';
 import { isReachableThreeDartScore } from '../match/aggregateScore';
+import { orderedFromStarter, playerIndex, requiredScore } from './turnOrder';
 
-const playerIndex = (match: Match, playerId: PlayerId): number => {
-  const index = match.players.indexOf(playerId);
-  if (index < 0) throw new Error('Игрок отсутствует в матче');
-  return index;
-};
-
-const requiredScore = (scores: Readonly<Record<PlayerId, number>>, playerId: PlayerId, label: string): number => {
-  const score = scores[playerId];
-  if (typeof score !== 'number' || !Number.isFinite(score) || !Number.isInteger(score) || score < 0)
-    throw new Error(`Некорректный ${label} игрока`);
-  return score;
-};
+/** A draw may be agreed only once the tie survived a full extra round of its own. */
+export const MIN_DRAW_ROUND = 2;
 
 const leadersByMinimumRemaining = (
   state: X01State,
@@ -28,13 +19,6 @@ const leadersByMinimumRemaining = (
   return playerIds.filter((_, index) => scores[index] === minimum);
 };
 
-const orderedFromStarter = (match: Match, playerIds: readonly PlayerId[]): readonly PlayerId[] => {
-  const eligible = new Set(playerIds);
-  return Array.from({ length: match.players.length }, (_, offset) =>
-    match.players[(match.startingPlayerIndex + offset) % match.players.length],
-  ).filter((id): id is PlayerId => id !== undefined && eligible.has(id));
-};
-
 const completedMatch = (match: Match, state: X01State, visit: Visit, winnerId: PlayerId): Match => ({
   ...match,
   state,
@@ -44,6 +28,25 @@ const completedMatch = (match: Match, state: X01State, visit: Visit, winnerId: P
   completedAt: visit.timestamp,
   winnerId,
 });
+
+/**
+ * In the limited format reaching zero does not end the match: the rest of the round is still
+ * played and the winner is decided afterwards by the minimum remaining score. Such a visit is
+ * recorded as `tie_pending` until it is known whether it actually won.
+ */
+const pendingFinish = (visit: Visit): Visit =>
+  visit.result === 'match_won' ? Object.freeze({ ...visit, result: 'tie_pending' as const }) : visit;
+
+/** Restores the `match_won` marker on the winner's own checkout once the round is over. */
+const promoteWinningFinish = (visits: readonly Visit[], winnerId: PlayerId): readonly Visit[] => {
+  const index = visits.reduce(
+    (found, visit, position) => visit.playerId === winnerId && visit.result === 'tie_pending' ? position : found,
+    -1,
+  );
+  return index < 0
+    ? visits
+    : visits.map((visit, position) => position === index ? Object.freeze({ ...visit, result: 'match_won' as const }) : visit);
+};
 
 export class X01Rules implements GameRules {
   evaluateDraft(draft: VisitDraft, match: Match): DraftEvaluation {
@@ -57,6 +60,9 @@ export class X01Rules implements GameRules {
       const start = match.state.remaining[playerId];
       if (start === undefined) throw new Error('Нет счёта текущего игрока');
       const after = start - score;
+      // A sum below zero is an unambiguous bust and needs no sectors; a sum that lands exactly on a
+      // finish (or on the unplayable 1 with double-out) still needs the last dart to be named.
+      if (after < 0) return { status: 'bust', physicalDartsUsed: 3, rawScore: score, awardedScore: 0, canAddNextDart: false, remainingAfter: start, validDartCount: 0, reason: 'Перебор — счёт ниже нуля' };
       if (after <= (match.state.outRule === 'double' ? 1 : 0)) return { status: 'invalid', physicalDartsUsed: 3, rawScore: score, awardedScore: 0, canAddNextDart: false, remainingAfter: start, validDartCount: 0, reason: 'Для завершения используйте ввод по дротикам' };
       return { status: 'ready_to_confirm', physicalDartsUsed: 3, rawScore: score, awardedScore: score, canAddNextDart: false, remainingAfter: after, validDartCount: 0 };
     }
@@ -101,8 +107,9 @@ export class X01Rules implements GameRules {
       ? { ...state.visitsCompleted, [playerId]: requiredScore(state.visitsCompleted, playerId, 'счётчик подходов') + 1 }
       : state.visitsCompleted;
     const nextState = { ...state, remaining, visitsCompleted } as X01State;
+    const finishesTheRound = state.phase.kind === 'regulation' && state.format.kind === 'limited';
 
-    if (visit.result === 'match_won') return completedMatch(match, nextState, visit, playerId);
+    if (visit.result === 'match_won' && !finishesTheRound) return completedMatch(match, nextState, visit, playerId);
 
     if (state.phase.kind === 'tie_break') {
       const completedPlayerIds = [...state.phase.completedPlayerIds, playerId];
@@ -142,9 +149,17 @@ export class X01Rules implements GameRules {
       const regulationComplete = match.players.every(id =>
         (visitsCompleted[id] ?? 0) >= visitsPerPlayer,
       );
-      if (regulationComplete) {
+      // A checkout stops the match at the end of its own round: everybody gets the same number of
+      // visits, and the result is read from the remaining scores once that round is complete.
+      const roundComplete = nextIndex === match.startingPlayerIndex;
+      const someoneFinished = match.players.some(id => remaining[id] === 0);
+      if (regulationComplete || (someoneFinished && roundComplete)) {
         const leaders = leadersByMinimumRemaining(nextState, match.players);
-        if (leaders.length === 1) return completedMatch(match, nextState, visit, leaders[0]!);
+        if (leaders.length === 1) {
+          const winnerId = leaders[0]!;
+          const completed = completedMatch(match, nextState, visit, winnerId);
+          return { ...completed, confirmedVisits: promoteWinningFinish(completed.confirmedVisits, winnerId) };
+        }
         const ordered = orderedFromStarter(match, leaders);
         const first = ordered[0];
         if (!first) throw new Error('Не удалось определить лидера матча');
@@ -152,11 +167,11 @@ export class X01Rules implements GameRules {
           ...match,
           state: { ...nextState, phase: { kind: 'awaiting_tie_break', playerIds: ordered, round: 1 } },
           currentPlayerIndex: playerIndex(match, first),
-          confirmedVisits: [...match.confirmedVisits, visit],
+          confirmedVisits: [...match.confirmedVisits, pendingFinish(visit)],
         };
       }
     }
-    return { ...match, state: nextState, currentPlayerIndex: nextIndex, confirmedVisits: [...match.confirmedVisits, visit] };
+    return { ...match, state: nextState, currentPlayerIndex: nextIndex, confirmedVisits: [...match.confirmedVisits, pendingFinish(visit)] };
   }
 
   startExtraRound(match: Match): Match {
@@ -181,7 +196,26 @@ export class X01Rules implements GameRules {
     };
   }
 
-  completeDraw(): Match {
-    throw new Error('В ограниченном 501 ничья решается дополнительными подходами');
+  canCompleteDraw(match: Match): boolean {
+    return match.state.kind === 'x01'
+      && match.state.phase.kind === 'awaiting_tie_break'
+      && match.state.phase.round >= MIN_DRAW_ROUND;
+  }
+
+  completeDraw(match: Match, now: string): Match {
+    if (match.state.kind !== 'x01' || match.state.phase.kind !== 'awaiting_tie_break')
+      throw new Error('Матч не ожидает решения о ничьей');
+    if (match.state.phase.round < MIN_DRAW_ROUND)
+      throw new Error('Ничью можно зафиксировать только со второго дополнительного круга');
+    const phase = match.state.phase;
+    return {
+      ...match,
+      status: 'completed',
+      completedAt: now,
+      state: {
+        ...match.state,
+        phase: { kind: 'completed_draw', playerIds: phase.playerIds, round: phase.round },
+      },
+    };
   }
 }

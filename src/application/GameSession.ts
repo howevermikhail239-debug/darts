@@ -186,8 +186,10 @@ export class GameSession {
         ? Object.freeze({ ...common, inputKind: 'detailed' as const, darts: Object.freeze([...this.draft.darts]) })
         : Object.freeze({ ...common, inputKind: 'aggregate' as const, aggregateScore: evaluation.rawScore });
       const applied = rules.applyConfirmedVisit(provisionalVisit, previous);
+      // The rules own the authoritative result of the visit they applied (a checkout in the
+      // limited format, for example, stays `tie_pending` until its round is finished).
       const visit: Visit = Object.freeze({
-        ...provisionalVisit,
+        ...(applied.confirmedVisits.at(-1) ?? provisionalVisit),
         after: visitContext(applied),
       });
       const next: Match = {
@@ -198,8 +200,7 @@ export class GameSession {
       await this.repository.saveActive(
         this.activeRecord(next, nextDraft, previous),
       );
-      this.checkpoints.push(previous);
-      if (this.checkpoints.length > MAX_UNDO_CHECKPOINTS) this.checkpoints.shift();
+      this.pushCheckpoint(previous);
       this.match = next;
       this.draft = nextDraft;
       this.notice = undefined;
@@ -224,11 +225,16 @@ export class GameSession {
     this.notice = "Предыдущий подход отменён.";
     return this.snapshot();
   }
+  private pushCheckpoint(previous: Match): void {
+    this.checkpoints.push(previous);
+    if (this.checkpoints.length > MAX_UNDO_CHECKPOINTS) this.checkpoints.shift();
+  }
   async extraRound(): Promise<SessionSnapshot> {
     this.ensureMutable();
+    const previous = this.match;
     const next = rulesFor(this.match).startExtraRound(this.match);
-    const previous = this.checkpoints.at(-1);
     await this.repository.saveActive(this.activeRecord(next, emptyDraft(), previous));
+    this.pushCheckpoint(previous);
     this.match = next;
     this.draft = emptyDraft();
     return this.snapshot();
@@ -238,13 +244,16 @@ export class GameSession {
     const previous = this.match;
     const next = rulesFor(this.match).completeDraw(this.match, this.now());
     await this.repository.saveActive(this.activeRecord(next, emptyDraft(), previous));
-    this.checkpoints.push(previous);
+    this.pushCheckpoint(previous);
     this.match = next;
     this.draft = emptyDraft();
     return this.snapshot();
   }
   async abandon(): Promise<Match> {
     this.ensureMutable();
+    // Abandoning a match that already has a result would erase that result: archive it as it is.
+    if (this.match.status === "completed") return this.finalize();
+    if (this.match.status === "abandoned") return this.match;
     const next: Match = {
       ...this.match,
       status: "abandoned",

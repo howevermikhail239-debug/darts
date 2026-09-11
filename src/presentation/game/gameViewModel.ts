@@ -3,6 +3,7 @@ import type { Match, Player, PlayerId } from "../../domain/match/models";
 import { statisticsForMatch } from "../../domain/statistics/StatisticsCalculator";
 import { draftIsEmpty, isDetailedDraft } from "../../domain/match/VisitDraft";
 import { checkoutSuggestion, checkoutText } from "../../domain/rules/checkoutSuggestion";
+import { victoryTitle } from "../players/victoryTitle";
 
 export type ScoreboardRowViewModel = Readonly<{
   playerId: PlayerId;
@@ -38,6 +39,20 @@ export type GameViewModel = Readonly<{
   summaryTitle: string;
 }>;
 
+/**
+ * PERF-5: `toGameViewModel` вызывается на каждом рендере экрана игры, а
+ * `statisticsForMatch` проходит по всем подтверждённым подходам. Матч —
+ * неизменяемое значение, поэтому результат кэшируется по ссылке на него.
+ */
+const statisticsCache = new WeakMap<Match, ReturnType<typeof statisticsForMatch>>();
+const statisticsOf = (match: Match): ReturnType<typeof statisticsForMatch> => {
+  const cached = statisticsCache.get(match);
+  if (cached) return cached;
+  const calculated = statisticsForMatch(match);
+  statisticsCache.set(match, calculated);
+  return calculated;
+};
+
 const displayName = (match: Match, players: readonly Player[], playerId: PlayerId): string =>
   players.find((player) => player.id === playerId)?.name ?? match.participantNames[playerId] ?? "Игрок";
 
@@ -49,7 +64,7 @@ const visitProgress = (values: readonly (number | undefined)[], total: number): 
 
 export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Player[], persistentPlayerIds: readonly PlayerId[] = players.map((player) => player.id)): GameViewModel {
   const match = snapshot.match;
-  const stats = statisticsForMatch(match);
+  const stats = statisticsOf(match);
   const currentPlayerId = match.players[match.currentPlayerIndex];
   if (!currentPlayerId) throw new Error("Некорректный текущий игрок матча");
   let title: string;
@@ -64,7 +79,7 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       ? `${match.state.startingScore} · ${match.state.format.visitsPerPlayer} подходов`
       : `${match.state.startingScore} · до победы`;
     awaitingTieDecision = phase.kind === "awaiting_tie_break";
-    canCompleteDraw = false;
+    canCompleteDraw = phase.kind === "awaiting_tie_break" && phase.round >= 2;
     inExtraRound = phase.kind === "tie_break";
     phaseLabel = phase.kind === "tie_break"
       ? `Дополнительный подход ${phase.round}`
@@ -139,8 +154,6 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       ? "Введите все три физических дротика"
       : "Можно подтвердить после трёх дротиков или досрочного завершения",
     summaryEyeline: match.state.kind === "x01" ? String(match.state.startingScore) : "Серия завершена",
-    summaryTitle: winnerName
-      ? `${winnerName} победил${winnerName.endsWith("а") ? "а" : ""}`
-      : "Ничья",
+    summaryTitle: victoryTitle(winnerName),
   };
 }

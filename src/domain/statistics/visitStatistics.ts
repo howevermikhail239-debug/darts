@@ -33,11 +33,15 @@ export function statisticsForVisits(visits: readonly Visit[], playerId: PlayerId
   const thresholds: Record<ThresholdKey, number> = { "60+": 0, "80+": 0, "100+": 0, "120+": 0, "140+": 0, "180": 0 };
   const distribution = Object.fromEntries(distributionKeys.map((key) => [key, 0])) as Record<DistributionKey, number>;
   const finishes: number[] = [], scoringValues: number[] = [];
-  let rawPoints = 0, physicalDarts = 0, knownHitDarts = 0, awardedPoints = 0, bestVisit = 0;
+  // `physicalDarts` stays the honest count of darts actually thrown; `scoringDarts` is the
+  // denominator of the scoring averages, where a bust costs the full visit of three darts —
+  // otherwise busting earlier (a worse mistake) would improve the 3-dart average.
+  let rawPoints = 0, physicalDarts = 0, scoringDarts = 0, knownHitDarts = 0, awardedPoints = 0, bestVisit = 0;
   let misses = 0, outerBulls = 0, bulls = 0, singles = 0, doubles = 0, triples = 0;
 
   for (const visit of own) {
     physicalDarts += visit.physicalDartsUsed;
+    scoringDarts += visit.result === "bust" ? 3 : visit.physicalDartsUsed;
     rawPoints += visit.rawScore;
     awardedPoints += visit.awardedScore;
     const scoringValue = visit.awardedScore;
@@ -67,7 +71,7 @@ export function statisticsForVisits(visits: readonly Visit[], playerId: PlayerId
   }
 
   const completedPositions = positions.map((position) => ({ ...position, average: safeRatio(position.points, position.physicalDarts), missPercent: percentage(position.misses, position.physicalDarts), triplePercent: percentage(position.triples, position.physicalDarts) })) as [DartPositionStatistics, DartPositionStatistics, DartPositionStatistics];
-  return { physicalDarts, knownHitDarts, visits: own.length, awardedPoints, rawPoints, averagePerDart: safeRatio(awardedPoints, physicalDarts), averagePerVisit: safeRatio(awardedPoints, own.length), threeDartAverage: safeRatio(awardedPoints * 3, physicalDarts), bestVisit, misses, outerBulls, bulls, singles, doubles, triples, hitCounts, positionScores: [completedPositions[0].points, completedPositions[1].points, completedPositions[2].points], positions: completedPositions, thresholds, distribution, resultSpread: standardDeviation(scoringValues), winningHits, finishes };
+  return { physicalDarts, knownHitDarts, visits: own.length, awardedPoints, rawPoints, averagePerDart: safeRatio(awardedPoints, scoringDarts), averagePerVisit: safeRatio(awardedPoints, own.length), threeDartAverage: safeRatio(awardedPoints * 3, scoringDarts), bestVisit, misses, outerBulls, bulls, singles, doubles, triples, hitCounts, positionScores: [completedPositions[0].points, completedPositions[1].points, completedPositions[2].points], positions: completedPositions, thresholds, distribution, resultSpread: standardDeviation(scoringValues), winningHits, finishes };
 }
 
 export const statisticsForMatch = (match: Match): Readonly<Record<PlayerId, PlayerStatistics>> => Object.fromEntries(match.players.map((id) => [id, statisticsForVisits(match.confirmedVisits, id)]));

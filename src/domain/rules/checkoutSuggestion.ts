@@ -1,10 +1,13 @@
-import { bull, numberThrow, notationOf, scoreOf, type DartThrow } from "../darts/DartThrow";
+import { bull, numberThrow, notationOf, outerBull, scoreOf, type DartThrow } from "../darts/DartThrow";
 
 const doubles: readonly DartThrow[] = [bull(), ...Array.from({ length: 20 }, (_, index) => numberThrow(20 - index, 2))];
 const scoring: readonly DartThrow[] = [
   ...Array.from({ length: 20 }, (_, index) => numberThrow(20 - index, 3)),
   ...doubles,
   ...Array.from({ length: 20 }, (_, index) => numberThrow(20 - index, 1)),
+  // The outer bull is the only way to score exactly 25 with one dart; it is last so that it never
+  // displaces an already preferred route and only fills routes that had no suggestion at all.
+  outerBull(),
 ];
 const preferred: Readonly<Record<number, readonly DartThrow[]>> = {
   170: [numberThrow(20, 3), numberThrow(20, 3), bull()], 167: [numberThrow(20, 3), numberThrow(19, 3), bull()],

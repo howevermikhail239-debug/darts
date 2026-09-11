@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DartboardHeatmap } from "../src/presentation/components/DartboardHeatmap";
 
@@ -16,6 +16,24 @@ describe("DartboardHeatmap", () => {
     fireEvent.focus(t20);
     expect(screen.getByText("T20 — 4 попаданий", { selector: "strong" })).toBeInTheDocument();
     expect(screen.getByText(/Карта построена по 14 детализированным броскам · промахов: 3/)).toBeInTheDocument();
+  });
+
+  it("clears the active sector label on blur and pointer leave, including the bull circles (UI-1)", () => {
+    const { container } = render(<DartboardHeatmap hitCounts={{ "25": 2, Bull: 1 }} detailedDarts={3} />);
+    const view = within(container);
+    const idle = "Наведите или нажмите на сектор";
+    const outer = view.getByText("25 — 2 попаданий").parentElement!;
+    const bull = view.getByText("Bull — 1 попаданий").parentElement!;
+
+    fireEvent.pointerEnter(outer);
+    expect(view.getByText("25 — 2 попаданий", { selector: "strong" })).toBeInTheDocument();
+    fireEvent.pointerLeave(outer);
+    expect(view.getByText(idle)).toBeInTheDocument();
+
+    fireEvent.focus(bull);
+    expect(view.getByText("Bull — 1 попаданий", { selector: "strong" })).toBeInTheDocument();
+    fireEvent.blur(bull);
+    expect(view.getByText(idle)).toBeInTheDocument();
   });
 
   it("does not invent sectors for legacy aggregate visits", () => {

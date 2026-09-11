@@ -5,6 +5,8 @@ import { restoreLastSetupParticipants, type LastSetupTemplate, type RestoredSetu
 import type { Player } from "../../domain/match/models";
 import type { TodaySummary } from "../../domain/statistics/todaySummary";
 import { PlayerIdentity } from "../components/PlayerIdentity";
+import { Dialog } from "../components/Dialog";
+import { userMessage } from "../errors/userMessage";
 import { t } from "../strings";
 
 export type SetupParticipant = MatchParticipantInput;
@@ -19,6 +21,7 @@ type Props = {
   onCreateCompany?: ((name: string) => Promise<void>) | undefined;
   onAddSharedPlayer?: ((name: string) => Promise<Player>) | undefined;
   onLeaveCompany?: (() => void) | undefined;
+  inviteLink?: string | undefined;
   onRetry?: (() => Promise<void>) | undefined;
   syncNote?: string | undefined;
   initialSetup?: LastSetupTemplate | undefined;
@@ -27,7 +30,7 @@ type Props = {
 
 const defaultParticipant = (index: number): ParticipantDraft => ({ name: `Игрок ${index + 1}` });
 
-export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalPlayer, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry, syncNote, initialSetup, today }: Props) {
+export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalPlayer, company, onCreateCompany, onAddSharedPlayer, onLeaveCompany, inviteLink, onRetry, syncNote, initialSetup, today }: Props) {
   const restoredParticipants = restoreLastSetupParticipants(initialSetup, saved);
   const restored = initialSetup?.setup;
   const restoredVisits = restored?.mode === "fixed_visits" ? restored.visitsPerPlayer : restored?.format.kind === "limited" ? restored.format.visitsPerPlayer : 20;
@@ -40,6 +43,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
   const [custom, setCustom] = useState(![5, 10, 20, 30].includes(restoredVisits));
   const [starter, setStarter] = useState<number | "random">(restored?.startingPlayerIndex ?? 0);
   const [busy, setBusy] = useState(false);
+  const [startError, setStartError] = useState<string>();
   const createProfile = company ? onAddSharedPlayer : onAddLocalPlayer;
 
   const selectedIds = participants.flatMap((participant) => participant.playerId ? [participant.playerId] : []);
@@ -51,6 +55,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
   const start = async () => {
     if (!valid) return;
     setBusy(true);
+    setStartError(undefined);
     try {
       const startingPlayerIndex = starter === "random" ? Math.floor(Math.random() * participants.length) : Math.min(starter, participants.length - 1);
       const clean = participants.map(({ name, playerId }) => ({ name: name.trim(), ...(playerId ? { playerId } : {}) }));
@@ -58,6 +63,8 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
         ? { mode, startingScore, outRule, format: x01Format === "unlimited" ? { kind: "unlimited" } : { kind: "limited", visitsPerPlayer: visits }, startingPlayerIndex }
         : { mode, visitsPerPlayer: visits, startingPlayerIndex };
       await onStart(clean, setup);
+    } catch (cause) {
+      setStartError(userMessage(cause, "Не удалось начать матч. Попробуйте ещё раз."));
     } finally {
       setBusy(false);
     }
@@ -66,7 +73,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
   return (
     <main className="setup-page">
       <header className="brand"><div className="brand-mark" aria-hidden="true">◎</div><div><h1>{t.newGame}</h1><p>Настройте матч — и к мишени.</p></div></header>
-      <CompanyContextPanel company={company} syncNote={syncNote} onCreateCompany={onCreateCompany} onAddSharedPlayer={onAddSharedPlayer} onLeaveCompany={onLeaveCompany} onRetry={onRetry} />
+      <CompanyContextPanel company={company} syncNote={syncNote} onCreateCompany={onCreateCompany} onAddSharedPlayer={onAddSharedPlayer} onLeaveCompany={onLeaveCompany} inviteLink={inviteLink} onRetry={onRetry} />
       {today ? <TodayPanel summary={today} /> : null}
       <section className="setup-form" aria-label="Настройка матча">
         <div className="setup-section-title"><span>1</span><div><h2>Участники</h2><p>Профиль хранит статистику между матчами. Временный игрок — только для этой игры.</p></div></div>
@@ -90,6 +97,7 @@ export function SetupPage({ saved, onStart, onHistory, onStatistics, onAddLocalP
         <div className="setup-section-title compact"><span>3</span><div><h2>Кто начинает</h2></div></div>
         <StarterSelector participants={participants} starter={starter} onStarter={setStarter} />
         <button className="primary start" onClick={() => void start()} disabled={busy || !valid}>{busy ? "Создаём…" : t.start}</button>
+        {startError ? <p className="reason" role="alert">{startError}</p> : null}
       </section>
       <nav className="home-links"><button className="link-button" onClick={onHistory}>{t.history}</button><button className="link-button" onClick={onStatistics}>Статистика</button></nav>
     </main>
@@ -107,12 +115,35 @@ function TodayPanel({ summary }: { summary: TodaySummary }) {
   </section>;
 }
 
-function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPlayer, onLeaveCompany, onRetry }: Pick<Props, "company" | "syncNote" | "onCreateCompany" | "onAddSharedPlayer" | "onLeaveCompany" | "onRetry">) {
+function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPlayer, onLeaveCompany, inviteLink, onRetry }: Pick<Props, "company" | "syncNote" | "onCreateCompany" | "onAddSharedPlayer" | "onLeaveCompany" | "inviteLink" | "onRetry">) {
   const [companyName, setCompanyName] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string>();
+  const [playerBusy, setPlayerBusy] = useState(false);
+  const [playerError, setPlayerError] = useState<string>();
+  const [copyNote, setCopyNote] = useState<string>();
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  // CLI-2: сетевая ошибка при добавлении игрока компании больше не теряется.
+  const addSharedPlayer = () => {
+    if (!onAddSharedPlayer || playerBusy) return;
+    setPlayerBusy(true);
+    setPlayerError(undefined);
+    void onAddSharedPlayer(playerName)
+      .then(() => setPlayerName(""))
+      .catch((cause: unknown) => setPlayerError(userMessage(cause, "Не удалось добавить игрока. Попробуйте ещё раз.")))
+      .finally(() => setPlayerBusy(false));
+  };
+
+  const copyInvite = () => {
+    setCopyNote(undefined);
+    const link = inviteLink ?? location.href;
+    void Promise.resolve(navigator.clipboard?.writeText(link))
+      .then(() => setCopyNote("Ссылка скопирована."))
+      .catch(() => setCopyNote("Скопировать не удалось — сохраните ссылку вручную."));
+  };
 
   const createCompany = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -133,12 +164,24 @@ function CompanyContextPanel({ company, syncNote, onCreateCompany, onAddSharedPl
       <div className="context-heading"><span className="context-icon" aria-hidden="true">◆</span><div><b>Компания{company.name ? ` · ${company.name}` : ""}</b><small>Общие профили, история и статистика</small></div></div>
       <span className={syncNote ? "sync-state pending" : "sync-state saved"} role="status">{syncNote ?? "Все матчи синхронизированы"}</span>
       <p className="company-guidance">Добавьте постоянных игроков ниже или сразу настройте и начните матч.</p>
-      <p className="company-guidance">Чтобы открыть эту же компанию на другом устройстве, отправьте игрокам ссылку-приглашение.</p>
-      <button className="link-button" onClick={() => void navigator.clipboard?.writeText(location.href)}>Скопировать ссылку для приглашения</button>
-      {syncNote ? <button className="link-button" onClick={() => void onRetry?.()}>Повторить</button> : null}
-      <button className="link-button" onClick={onLeaveCompany}>Это устройство</button>
-      <label>Добавить игрока компании<input value={playerName} maxLength={80} onChange={(event) => setPlayerName(event.target.value)} /></label>
-      <button className="secondary" disabled={!playerName.trim()} onClick={() => { if (onAddSharedPlayer) void onAddSharedPlayer(playerName).then(() => setPlayerName("")); }}>Добавить игрока</button>
+      <p className="company-guidance">Чтобы открыть эту же компанию на другом устройстве, отправьте игрокам ссылку-приглашение. Сохраните её: другого способа вернуться в компанию нет.</p>
+      <p className="invite-link"><span>Ссылка-приглашение</span><code>{inviteLink ?? location.href}</code></p>
+      <button className="link-button" onClick={copyInvite}>Скопировать ссылку для приглашения</button>
+      {copyNote ? <span className="invite-note" role="status">{copyNote}</span> : null}
+      {syncNote ? <button className="link-button" onClick={() => void onRetry?.().catch(() => undefined)}>Повторить</button> : null}
+      <button className="link-button" onClick={() => setConfirmLeave(true)}>Выйти из компании</button>
+      <label>Добавить игрока компании<input value={playerName} maxLength={80} disabled={playerBusy} onChange={(event) => setPlayerName(event.target.value)} /></label>
+      <button className="secondary" disabled={playerBusy || !playerName.trim()} onClick={addSharedPlayer}>{playerBusy ? "Добавляем…" : "Добавить игрока"}</button>
+      {playerError ? <p className="reason" role="alert">{playerError}</p> : null}
+      <Dialog
+        open={confirmLeave}
+        title="Выйти из компании?"
+        description={`Это устройство перестанет показывать общие профили, историю и статистику${company.name ? ` компании «${company.name}»` : ""}. Вернуться можно по ссылке-приглашению или из списка компаний на главном экране — ссылку лучше сохранить заранее.`}
+        confirmLabel="Выйти из компании"
+        destructive
+        onCancel={() => setConfirmLeave(false)}
+        onConfirm={() => { setConfirmLeave(false); onLeaveCompany?.(); }}
+      />
     </section>
   );
   return (

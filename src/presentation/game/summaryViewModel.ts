@@ -1,5 +1,6 @@
 import type { Match, Player, PlayerId } from "../../domain/match/models";
 import { statisticsForMatch } from "../../domain/statistics/StatisticsCalculator";
+import { victoryTitle } from "../players/victoryTitle";
 
 export type SummaryViewModel = Readonly<{
   title: string;
@@ -23,7 +24,7 @@ export function toSummaryViewModel(match: Match, players: readonly Player[]): Su
     { label: "Подходов сыграно", value: String(visits) },
   ].slice(0, 3);
   return {
-    title: winnerName ? `${winnerName} победил${/(на|ла|ра|та|га)$/iu.test(winnerName) ? "а" : ""}` : "Ничья",
+    title: victoryTitle(winnerName),
     ...(match.winnerId && winnerName ? { winner: { playerId: match.winnerId, name: winnerName, temporary: !saved.has(match.winnerId), position: winnerPosition } } : {}),
     facts,
     maximums,
