@@ -63,10 +63,13 @@ function isVisit(value: unknown, matchId: string, players: readonly string[]): b
     && value.rawScore === value.darts.reduce((total: number, dart: DartThrow) => total + scoreOf(dart), 0);
 }
 
-/** Необязательный список участников фазы: либо отсутствует, либо корректное подмножество игроков матча. */
+/**
+ * Необязательный список участников фазы: либо отсутствует, либо корректное подмножество
+ * игроков матча. Пустой список допустим (например, ещё никто не завершил раунд).
+ */
 function isOptionalPhasePlayerIds(value: unknown, players: readonly string[]): boolean {
   if (value === undefined) return true;
-  return isIdList(value) && value.length >= 1 && isUnique(value) && value.every((id) => players.includes(id));
+  return isIdList(value) && isUnique(value) && value.every((id) => players.includes(id));
 }
 function isOptionalPhaseScores(value: unknown, players: readonly string[]): boolean {
   if (value === undefined) return true;
