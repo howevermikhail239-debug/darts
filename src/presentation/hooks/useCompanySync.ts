@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { CompanySync, SharedCompany } from "../../application/CompanySync";
-import type { Match, Player } from "../../domain/match/models";
-import { networkMessage } from "../errors/userMessage";
-import type { SharedMatchState } from "../../application/ports/repositories";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CompanySync, SharedCompany } from '../../application/CompanySync';
+import type { Match, Player } from '../../domain/match/models';
+import { networkMessage } from '../errors/userMessage';
+import type { SharedMatchState } from '../../application/ports/repositories';
 
 type SharedMatch = Readonly<{
   match: Match;
   state: SharedMatchState;
+  reason?: string;
 }>;
 
 type SharedCache = Readonly<{
@@ -20,7 +21,7 @@ type Dependencies = Readonly<{
   cache: SharedCache;
 }>;
 
-const offlineNote = "Нет связи. Матч сохранится и отправится позже.";
+const offlineNote = 'Нет связи. Матч сохранится и отправится позже.';
 
 function tokenFromPath(): string | undefined {
   return /^\/g\/([^/]+)$/.exec(location.pathname)?.[1];
@@ -29,7 +30,11 @@ function tokenFromPath(): string | undefined {
 /** Меняет путь, сохраняя состояние истории экранов (см. `useScreenHistory`). */
 function replacePath(path: string): void {
   const state = window.history.state as unknown;
-  window.history.replaceState(state && typeof state === "object" ? { ...(state as Record<string, unknown>) } : null, "", path);
+  window.history.replaceState(
+    state && typeof state === 'object' ? { ...(state as Record<string, unknown>) } : null,
+    '',
+    path,
+  );
 }
 
 export const companyInviteLink = (token: string): string => `${location.origin}/g/${token}`;
@@ -53,34 +58,55 @@ export function useCompanySync({ sync, cache }: Dependencies) {
   // компании необратим, потому что токен существует только в адресной строке.
   useEffect(() => {
     let alive = true;
-    void cache.companies()
-      .then((list) => { if (alive) setKnownCompanies(list); })
-      .catch(() => { if (alive) setKnownCompanies([]); });
-    return () => { alive = false; };
+    void cache
+      .companies()
+      .then((list) => {
+        if (alive) setKnownCompanies(list);
+      })
+      .catch(() => {
+        if (alive) setKnownCompanies([]);
+      });
+    return () => {
+      alive = false;
+    };
   }, [cache, catalogRevision]);
 
-  const applyCache = useCallback(async (token: string, expectedGeneration: number) => {
-    const [nextPlayers, matches] = await Promise.all([
-      cache.players(token),
-      cache.matches(token),
-    ]);
-    if (currentToken.current !== token || generation.current !== expectedGeneration) return;
-    setPlayers(nextPlayers);
-    setHistory(matches.map((item) => item.match));
-    setNote(matches.some((item) => item.state !== "synced") ? "Матч ожидает отправки." : "Все матчи синхронизированы");
-  }, [cache]);
+  const applyCache = useCallback(
+    async (token: string, expectedGeneration: number) => {
+      const [nextPlayers, matches] = await Promise.all([cache.players(token), cache.matches(token)]);
+      if (currentToken.current !== token || generation.current !== expectedGeneration) return;
+      setPlayers(nextPlayers);
+      setHistory(matches.map((item) => item.match));
+      const rejected = matches.find((item) => item.state === 'rejected');
+      const issues = sync.lastSnapshotIssues();
+      const issueNote =
+        issues && (issues.skippedMatches > 0 || issues.skippedPlayers > 0)
+          ? ` Пропущено повреждённых записей: ${issues.skippedMatches + issues.skippedPlayers}.`
+          : '';
+      const syncNote = rejected
+        ? `Матч отклонён сервером${rejected.reason ? `: ${rejected.reason}` : '.'}`
+        : matches.some((item) => item.state !== 'synced')
+          ? 'Матч ожидает отправки.'
+          : 'Все матчи синхронизированы';
+      setNote(`${syncNote}${issueNote}`);
+    },
+    [cache, sync],
+  );
 
-  const synchronize = useCallback(async (forceRetry: boolean) => {
-    const token = currentToken.current;
-    if (!token) return;
-    const expectedGeneration = generation.current;
-    try {
-      await sync.sync(token, forceRetry);
-      await applyCache(token, expectedGeneration);
-    } catch {
-      if (currentToken.current === token && generation.current === expectedGeneration) setNote(offlineNote);
-    }
-  }, [applyCache, sync]);
+  const synchronize = useCallback(
+    async (forceRetry: boolean) => {
+      const token = currentToken.current;
+      if (!token) return;
+      const expectedGeneration = generation.current;
+      try {
+        await sync.sync(token, forceRetry);
+        await applyCache(token, expectedGeneration);
+      } catch {
+        if (currentToken.current === token && generation.current === expectedGeneration) setNote(offlineNote);
+      }
+    },
+    [applyCache, sync],
+  );
 
   // Explicit user retries and a browser "online" event bypass exponential
   // backoff. Automatic post-match sync keeps it, so a bad connection cannot
@@ -106,7 +132,11 @@ export function useCompanySync({ sync, cache }: Dependencies) {
         setCompany(known);
         setPlayers(cachedPlayers);
         setHistory(cachedMatches.map((item) => item.match));
-        setNote(cachedMatches.some((item) => item.state !== "synced") ? "Матч ожидает отправки." : "Все матчи синхронизированы");
+        setNote(
+          cachedMatches.some((item) => item.state !== 'synced')
+            ? 'Матч ожидает отправки.'
+            : 'Все матчи синхронизированы',
+        );
       }
       try {
         const opened = await sync.open(token);
@@ -118,40 +148,47 @@ export function useCompanySync({ sync, cache }: Dependencies) {
       } catch (cause) {
         if (!active || generation.current !== expectedGeneration) return;
         if (known) setNote(offlineNote);
-        else setError(networkMessage(cause, "Компания не найдена или ссылка недействительна."));
+        else setError(networkMessage(cause, 'Компания не найдена или ссылка недействительна.'));
       } finally {
         if (active && generation.current === expectedGeneration) setLoading(false);
       }
     })().catch((cause: unknown) => {
       if (active && generation.current === expectedGeneration) {
-        console.error("Отказ локального хранилища при открытии компании:", cause);
-        setStorageError("Не удалось прочитать данные компании на этом устройстве.");
+        console.error('Отказ локального хранилища при открытии компании:', cause);
+        setStorageError('Не удалось прочитать данные компании на этом устройстве.');
         setLoading(false);
       }
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [activeToken, applyCache, cache, sync, syncAfterMatch]);
 
   useEffect(() => {
     if (!company) return;
-    const handleOnline = () => { void retry(); };
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    const handleOnline = () => {
+      void retry();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, [company, retry]);
 
-  const createCompany = useCallback(async (name: string) => {
-    const created = await sync.create(name);
-    generation.current += 1;
-    currentToken.current = created.token;
-    setCompany(created);
-    setPlayers([]);
-    setHistory([]);
-    setNote(undefined);
-    setError(undefined);
-    setActiveToken(created.token);
-    setCatalogRevision((value) => value + 1);
-    replacePath(`/g/${created.token}`);
-  }, [sync]);
+  const createCompany = useCallback(
+    async (name: string) => {
+      const created = await sync.create(name);
+      generation.current += 1;
+      currentToken.current = created.token;
+      setCompany(created);
+      setPlayers([]);
+      setHistory([]);
+      setNote(undefined);
+      setError(undefined);
+      setActiveToken(created.token);
+      setCatalogRevision((value) => value + 1);
+      replacePath(`/g/${created.token}`);
+    },
+    [sync],
+  );
 
   /**
    * Возврат в уже известную устройству компанию (DATA-6). Перезагрузка страницы
@@ -171,33 +208,53 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     replacePath(`/g/${token}`);
   }, []);
 
-  const addPlayer = useCallback(async (name: string) => {
-    const token = currentToken.current;
-    if (!token) throw new Error("Компания не выбрана");
-    const player = await sync.addPlayer(token, name);
-    if (currentToken.current === token) setPlayers((current) => [...current, player]);
-    return player;
-  }, [sync]);
+  const addPlayer = useCallback(
+    async (name: string) => {
+      const token = currentToken.current;
+      if (!token) throw new Error('Компания не выбрана');
+      const player = await sync.addPlayer(token, name);
+      if (currentToken.current === token) setPlayers((current) => [...current, player]);
+      return player;
+    },
+    [sync],
+  );
 
-  const mutatePlayer = useCallback(async (operation: (token: string) => Promise<Player>) => {
-    const token = currentToken.current;
-    if (!token || !navigator.onLine) throw new Error("Для изменения данных требуется подключение к серверу.");
-    const player = await operation(token);
-    setPlayers(await cache.players(token));
-    return player;
-  }, [cache]);
-  const renamePlayer = useCallback((playerId: string, name: string) => mutatePlayer((token) => sync.renamePlayer(token, playerId, name)), [mutatePlayer, sync]);
-  const resetPlayerStatistics = useCallback((playerId: string) => mutatePlayer((token) => sync.resetPlayerStatistics(token, playerId)), [mutatePlayer, sync]);
-  const deletePlayer = useCallback(async (playerId: string) => {
-    const token = currentToken.current;
-    if (!token || !navigator.onLine) throw new Error("Для удаления требуется подключение к серверу.");
-    await sync.deletePlayer(token, playerId); setPlayers(await cache.players(token));
-  }, [cache, sync]);
-  const deleteMatch = useCallback(async (matchId: string) => {
-    const token = currentToken.current;
-    if (!token || !navigator.onLine) throw new Error("Для удаления требуется подключение к серверу.");
-    await sync.deleteMatch(token, matchId); await applyCache(token, generation.current);
-  }, [applyCache, sync]);
+  const mutatePlayer = useCallback(
+    async (operation: (token: string) => Promise<Player>) => {
+      const token = currentToken.current;
+      if (!token || !navigator.onLine) throw new Error('Для изменения данных требуется подключение к серверу.');
+      const player = await operation(token);
+      setPlayers(await cache.players(token));
+      return player;
+    },
+    [cache],
+  );
+  const renamePlayer = useCallback(
+    (playerId: string, name: string) => mutatePlayer((token) => sync.renamePlayer(token, playerId, name)),
+    [mutatePlayer, sync],
+  );
+  const resetPlayerStatistics = useCallback(
+    (playerId: string) => mutatePlayer((token) => sync.resetPlayerStatistics(token, playerId)),
+    [mutatePlayer, sync],
+  );
+  const deletePlayer = useCallback(
+    async (playerId: string) => {
+      const token = currentToken.current;
+      if (!token || !navigator.onLine) throw new Error('Для удаления требуется подключение к серверу.');
+      await sync.deletePlayer(token, playerId);
+      setPlayers(await cache.players(token));
+    },
+    [cache, sync],
+  );
+  const deleteMatch = useCallback(
+    async (matchId: string) => {
+      const token = currentToken.current;
+      if (!token || !navigator.onLine) throw new Error('Для удаления требуется подключение к серверу.');
+      await sync.deleteMatch(token, matchId);
+      await applyCache(token, generation.current);
+    },
+    [applyCache, sync],
+  );
 
   const leaveCompany = useCallback(() => {
     generation.current += 1;
@@ -210,7 +267,7 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     setLoading(false);
     setActiveToken(undefined);
     setCatalogRevision((value) => value + 1);
-    replacePath("/");
+    replacePath('/');
   }, []);
 
   return {

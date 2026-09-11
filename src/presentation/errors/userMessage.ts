@@ -1,22 +1,28 @@
-/**
- * Единая точка превращения исключения в текст для пользователя (OOP-1, DATA-4).
- *
- * Пока в домене нет кодов ошибок, отличить «законную подсказку пользователю»
- * от нарушения инварианта можно только по тексту сообщения. Список ниже —
- * ЯВНАЯ и ограниченная эвристика: всё, что в него не попало, считается багом,
- * пишется в `console.error` и показывается нейтральным текстом.
- *
- * Как только домен начнёт бросать типизированные ошибки с кодом, список
- * `USER_CONDITIONS` заменяется на сопоставление «код → текст», а сигнатура
- * функций остаётся прежней.
- */
+import { DomainError, type DomainErrorCode } from '../../domain/errors';
 
-export const GENERIC_FAILURE = "Что-то пошло не так, попробуйте ещё раз.";
-export const NETWORK_FAILURE = "Нет связи с сервером. Проверьте подключение и попробуйте ещё раз.";
-export const SERVER_FAILURE = "Сервер ответил неожиданным образом. Попробуйте ещё раз позже.";
-export const STORAGE_FAILURE = "Не удалось прочитать данные на этом устройстве.";
+/** Единая точка превращения исключения в текст для пользователя (OOP-1, DATA-4). */
 
-/** Условия, о которых пользователю честно сообщать дословно: он может на них повлиять. */
+export const GENERIC_FAILURE = 'Что-то пошло не так, попробуйте ещё раз.';
+export const NETWORK_FAILURE = 'Нет связи с сервером. Проверьте подключение и попробуйте ещё раз.';
+export const SERVER_FAILURE = 'Сервер ответил неожиданным образом. Попробуйте ещё раз позже.';
+export const STORAGE_FAILURE = 'Не удалось прочитать данные на этом устройстве.';
+
+const DOMAIN_MESSAGES: Partial<Record<DomainErrorCode, string>> = {
+  draft_not_reset: 'Сначала сбросьте незавершённый подход',
+  busy_confirming: 'Подтверждение уже выполняется',
+  busy_persisting: 'Идёт сохранение подхода',
+  nothing_to_undo: 'Нет подхода для отмены',
+  match_finished: 'Матч завершён',
+  draw_not_pending: 'Сначала выберите результат ничьей',
+  draw_too_early: 'Ничью можно зафиксировать только со второго дополнительного круга',
+  extra_round_unavailable: 'Дополнительный подход сейчас недоступен',
+  player_limits: 'Проверьте количество и уникальность игроков',
+  visits_range: 'Количество подходов должно быть от 1 до 999',
+  profile_missing: 'Сохранённый профиль игрока не найден',
+  rematch_requires_completed: 'Повторить можно только завершённый матч',
+};
+
+/** Legacy adapter/application conditions are kept explicit while their ports migrate to codes. */
 const USER_CONDITIONS: readonly RegExp[] = [
   /^Сначала сбросьте незавершённый подход/u,
   /^Сначала переключитесь на /u,
@@ -59,14 +65,14 @@ const USER_CONDITIONS: readonly RegExp[] = [
 ];
 
 const isNetworkFailure = (cause: unknown): boolean => {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   if (!(cause instanceof Error)) return false;
-  if (cause.name === "TypeError" && /fetch|network|load failed/iu.test(cause.message)) return true;
-  return cause.name === "AbortError" || /NetworkError|ERR_INTERNET_DISCONNECTED/iu.test(cause.message);
+  if (cause.name === 'TypeError' && /fetch|network|load failed/iu.test(cause.message)) return true;
+  return cause.name === 'AbortError' || /NetworkError|ERR_INTERNET_DISCONNECTED/iu.test(cause.message);
 };
 
 const isMalformedResponse = (cause: unknown): boolean =>
-  cause instanceof Error && (cause.name === "SyntaxError" || /не удалось разобрать ответ/iu.test(cause.message));
+  cause instanceof Error && (cause.name === 'SyntaxError' || /не удалось разобрать ответ/iu.test(cause.message));
 
 const isKnownUserCondition = (message: string): boolean => USER_CONDITIONS.some((pattern) => pattern.test(message));
 
@@ -75,8 +81,16 @@ const isKnownUserCondition = (message: string): boolean => USER_CONDITIONS.some(
  * Технические подробности не доходят до интерфейса, но попадают в консоль.
  */
 export function userMessage(cause: unknown, fallback: string = GENERIC_FAILURE): string {
+  if (cause instanceof DomainError) {
+    const message = DOMAIN_MESSAGES[cause.code];
+    if (message) return message;
+    console.error('Нарушение доменного инварианта:', cause);
+    return fallback;
+  }
+  if (cause instanceof Error && cause.name === 'ActiveMatchConflictError')
+    return 'Матч уже изменён в другой вкладке. Прогресс обновлён; проверьте текущий подход.';
   if (cause instanceof Error && isKnownUserCondition(cause.message)) return cause.message;
-  console.error("Необработанная ошибка интерфейса:", cause);
+  console.error('Необработанная ошибка интерфейса:', cause);
   return fallback;
 }
 
