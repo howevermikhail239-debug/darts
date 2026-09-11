@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CompanySync, SharedCompany } from "../../application/CompanySync";
 import type { Match, Player } from "../../domain/match/models";
+import { networkMessage } from "../errors/userMessage";
 
 type SharedMatch = Readonly<{
   match: Match;
@@ -24,16 +25,38 @@ function tokenFromPath(): string | undefined {
   return /^\/g\/([^/]+)$/.exec(location.pathname)?.[1];
 }
 
+/** Меняет путь, сохраняя состояние истории экранов (см. `useScreenHistory`). */
+function replacePath(path: string): void {
+  const state = window.history.state as unknown;
+  window.history.replaceState(state && typeof state === "object" ? { ...(state as Record<string, unknown>) } : null, "", path);
+}
+
+export const companyInviteLink = (token: string): string => `${location.origin}/g/${token}`;
+
 export function useCompanySync({ sync, cache }: Dependencies) {
-  const [initialToken] = useState(tokenFromPath);
-  const currentToken = useRef(initialToken);
+  const [activeToken, setActiveToken] = useState(tokenFromPath);
+  const currentToken = useRef(activeToken);
   const generation = useRef(0);
-  const [loading, setLoading] = useState(Boolean(initialToken));
+  const [loading, setLoading] = useState(Boolean(activeToken));
   const [company, setCompany] = useState<SharedCompany>();
   const [players, setPlayers] = useState<readonly Player[]>([]);
   const [history, setHistory] = useState<readonly Match[]>([]);
   const [note, setNote] = useState<string>();
   const [error, setError] = useState<string>();
+  // Отказ локального хранилища — отдельная, фатальная категория (DATA-4).
+  const [storageError, setStorageError] = useState<string>();
+  const [knownCompanies, setKnownCompanies] = useState<readonly SharedCompany[]>([]);
+  const [catalogRevision, setCatalogRevision] = useState(0);
+
+  // Список компаний, которые устройство уже знает (DATA-6): без него выход из
+  // компании необратим, потому что токен существует только в адресной строке.
+  useEffect(() => {
+    let alive = true;
+    void cache.companies()
+      .then((list) => { if (alive) setKnownCompanies(list); })
+      .catch(() => { if (alive) setKnownCompanies([]); });
+    return () => { alive = false; };
+  }, [cache, catalogRevision]);
 
   const applyCache = useCallback(async (token: string, expectedGeneration: number) => {
     const [nextPlayers, matches] = await Promise.all([
@@ -59,18 +82,18 @@ export function useCompanySync({ sync, cache }: Dependencies) {
   }, [applyCache, sync]);
 
   useEffect(() => {
-    const token = initialToken;
+    const token = activeToken;
     if (!token) return;
     const expectedGeneration = ++generation.current;
     currentToken.current = token;
     let active = true;
     void (async () => {
-      const [knownCompanies, cachedPlayers, cachedMatches] = await Promise.all([
+      const [cachedCompanies, cachedPlayers, cachedMatches] = await Promise.all([
         cache.companies(),
         cache.players(token),
         cache.matches(token),
       ]);
-      const known = knownCompanies.find((item) => item.token === token);
+      const known = cachedCompanies.find((item) => item.token === token);
       if (!active || generation.current !== expectedGeneration) return;
       if (known) {
         setCompany(known);
@@ -82,23 +105,25 @@ export function useCompanySync({ sync, cache }: Dependencies) {
         const opened = await sync.open(token);
         if (!active || generation.current !== expectedGeneration) return;
         setCompany(opened);
+        if (!known) setCatalogRevision((value) => value + 1);
         await applyCache(token, expectedGeneration);
         if (active && generation.current === expectedGeneration) void retry();
       } catch (cause) {
         if (!active || generation.current !== expectedGeneration) return;
         if (known) setNote(offlineNote);
-        else setError(cause instanceof Error ? cause.message : "Компания не найдена или ссылка недействительна.");
+        else setError(networkMessage(cause, "Компания не найдена или ссылка недействительна."));
       } finally {
         if (active && generation.current === expectedGeneration) setLoading(false);
       }
     })().catch((cause: unknown) => {
       if (active && generation.current === expectedGeneration) {
-        setError(cause instanceof Error ? cause.message : "Ошибка локального хранилища");
+        console.error("Отказ локального хранилища при открытии компании:", cause);
+        setStorageError("Не удалось прочитать данные компании на этом устройстве.");
         setLoading(false);
       }
     });
     return () => { active = false; };
-  }, [applyCache, cache, initialToken, retry, sync]);
+  }, [activeToken, applyCache, cache, retry, sync]);
 
   useEffect(() => {
     if (!company) return;
@@ -116,8 +141,28 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     setHistory([]);
     setNote(undefined);
     setError(undefined);
-    window.history.replaceState(null, "", `/g/${created.token}`);
+    setActiveToken(created.token);
+    setCatalogRevision((value) => value + 1);
+    replacePath(`/g/${created.token}`);
   }, [sync]);
+
+  /**
+   * Возврат в уже известную устройству компанию (DATA-6). Перезагрузка страницы
+   * не нужна: активный матч живёт в отдельном хуке и не теряется.
+   */
+  const openCompany = useCallback((token: string) => {
+    if (currentToken.current === token) return;
+    generation.current += 1;
+    currentToken.current = token;
+    setCompany(undefined);
+    setPlayers([]);
+    setHistory([]);
+    setNote(undefined);
+    setError(undefined);
+    setLoading(true);
+    setActiveToken(token);
+    replacePath(`/g/${token}`);
+  }, []);
 
   const addPlayer = useCallback(async (name: string) => {
     const token = currentToken.current;
@@ -155,7 +200,10 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     setHistory([]);
     setNote(undefined);
     setError(undefined);
-    window.history.replaceState(null, "", "/");
+    setLoading(false);
+    setActiveToken(undefined);
+    setCatalogRevision((value) => value + 1);
+    replacePath("/");
   }, []);
 
   return {
@@ -165,7 +213,11 @@ export function useCompanySync({ sync, cache }: Dependencies) {
     history,
     note,
     error,
+    storageError,
+    knownCompanies,
+    inviteLink: company ? companyInviteLink(company.token) : undefined,
     createCompany,
+    openCompany,
     addPlayer,
     renamePlayer,
     resetPlayerStatistics,

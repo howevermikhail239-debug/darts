@@ -33,17 +33,27 @@ export type X01Phase =
       completedPlayerIds: readonly PlayerId[];
       roundScores: Readonly<Record<PlayerId, number>>;
       round: number;
-    }>;
+    }>
+  | Readonly<{ kind: 'completed_draw'; playerIds: readonly PlayerId[]; round: number }>;
 export type X01State = Readonly<{
   kind: 'x01'; startingScore: 301 | 501 | 701; outRule: 'straight' | 'double';
   format: X01Format; remaining: Readonly<Record<PlayerId, number>>;
   visitsCompleted: Readonly<Record<PlayerId, number>>; phase: X01Phase;
 }>;
+// `playerIds`, `roundScores` and `completedPlayerIds` are optional on purpose: matches persisted
+// before the extra round was narrowed to the tied players carry the older shape, and a phase
+// without `playerIds` is read as "every participant plays the extra round".
 export type FixedVisitsPhase =
   | Readonly<{ kind: 'regulation' }>
-  | Readonly<{ kind: 'awaiting_tie_decision'; round: number }>
-  | Readonly<{ kind: 'extra_round'; round: number }>
-  | Readonly<{ kind: 'completed_draw'; round: number }>;
+  | Readonly<{ kind: 'awaiting_tie_decision'; playerIds?: readonly PlayerId[]; round: number }>
+  | Readonly<{
+      kind: 'extra_round';
+      playerIds?: readonly PlayerId[];
+      completedPlayerIds?: readonly PlayerId[];
+      roundScores?: Readonly<Record<PlayerId, number>>;
+      round: number;
+    }>
+  | Readonly<{ kind: 'completed_draw'; playerIds?: readonly PlayerId[]; round: number }>;
 export type FixedVisitsState = Readonly<{
   kind: 'fixed_visits'; visitsPerPlayer: number; totals: Readonly<Record<PlayerId, number>>;
   regulationCompleted: Readonly<Record<PlayerId, number>>; extraRoundsCompleted: number;
@@ -56,6 +66,9 @@ export type Match = Readonly<{
   participantNames: Readonly<Record<PlayerId, string>>;
   state: ModeState; confirmedVisits: readonly Visit[]; winnerId?: PlayerId;
 }>;
+
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 8;
 
 export const modeOf = (match: Match): ModeState['kind'] => match.state.kind;
 export const participantName = (match: Match, playerId: PlayerId): string =>

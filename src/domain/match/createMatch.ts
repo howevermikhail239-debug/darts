@@ -1,4 +1,4 @@
-import type { Match, PlayerId } from "./models";
+import { MAX_PLAYERS, MIN_PLAYERS, type Match, type PlayerId } from "./models";
 
 export type MatchSetup =
   | Readonly<{
@@ -25,8 +25,10 @@ export function createMatch(
     playerIds.map((playerId, index) => [playerId, `Игрок ${index + 1}`]),
   ),
 ): Match {
-  if (playerIds.length < 2 || new Set(playerIds).size !== playerIds.length)
-    throw new Error("Матчу нужны как минимум два разных игрока");
+  if (playerIds.length < MIN_PLAYERS || new Set(playerIds).size !== playerIds.length)
+    throw new Error(`Матчу нужны как минимум ${MIN_PLAYERS} разных игрока`);
+  if (playerIds.length > MAX_PLAYERS)
+    throw new Error(`В матче не может быть больше ${MAX_PLAYERS} игроков`);
   if (
     !Number.isInteger(setup.startingPlayerIndex) ||
     setup.startingPlayerIndex < 0 ||

@@ -1,15 +1,14 @@
-/* global clients, self */
-let replacesExistingWorker = false;
-
-self.addEventListener('install', () => {
-  replacesExistingWorker = Boolean(self.registration.active);
-});
-
-self.addEventListener('activate', (event) => {
-  if (!replacesExistingWorker) return;
-  event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((windows) => Promise.all(
-      windows.map((client) => client.navigate(client.url)),
-    )),
-  );
+/* global self */
+/*
+ * Мост между страницей и ожидающим service worker.
+ *
+ * Единственная задача файла — применить уже установленное обновление,
+ * когда пользователь явно нажал «Обновить» на плашке в интерфейсе.
+ * Никакой самостоятельной навигации открытых окон здесь быть не должно:
+ * страницу перезагружает браузер после смены контроллера, и только по
+ * согласию пользователя (см. REL-3).
+ */
+self.addEventListener('message', (event) => {
+  const data = event && event.data;
+  if (data && data.type === 'SKIP_WAITING') self.skipWaiting();
 });

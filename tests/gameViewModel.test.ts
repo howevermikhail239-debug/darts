@@ -93,8 +93,10 @@ describe("GameViewModel", () => {
     const match = x01();
     if (match.state.kind !== "x01") throw new Error("fixture");
     const awaiting: Match = { ...match, state: { ...match.state, format: { kind: "limited", visitsPerPlayer: 1 }, phase: { kind: "awaiting_tie_break", playerIds: ["a", "b"], round: 2 } } };
+    const firstTie: Match = { ...match, state: { ...match.state, format: { kind: "limited", visitsPerPlayer: 1 }, phase: { kind: "awaiting_tie_break", playerIds: ["a", "b"], round: 1 } } };
     const extra: Match = { ...awaiting, state: { ...match.state, format: { kind: "limited", visitsPerPlayer: 1 }, phase: { kind: "tie_break", playerIds: ["a", "b"], completedPlayerIds: [], roundScores: {}, round: 2 } } };
-    expect(toGameViewModel(snapshot(awaiting), players)).toMatchObject({ awaitingTieDecision: true, canCompleteDraw: false, phaseLabel: "Ничья по минимальному остатку" });
+    expect(toGameViewModel(snapshot(firstTie), players)).toMatchObject({ awaitingTieDecision: true, canCompleteDraw: false, phaseLabel: "Ничья по минимальному остатку" });
+    expect(toGameViewModel(snapshot(awaiting), players)).toMatchObject({ awaitingTieDecision: true, canCompleteDraw: true, phaseLabel: "Ничья по минимальному остатку" });
     expect(toGameViewModel(snapshot(extra), players)).toMatchObject({ inExtraRound: true, phaseLabel: "Дополнительный подход 2" });
   });
 

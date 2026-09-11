@@ -7,7 +7,7 @@ const buildRevision = nodeProcess?.env?.BUILD_REVISION ?? 'unknown';
 
 export default defineConfig({
   plugins: [react(), { name: 'build-revision', generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ revision: buildRevision }) }); } }, VitePWA({
-    registerType: 'autoUpdate',
+    registerType: 'prompt',
     includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg'],
     manifest: {
       name: 'Счётчик дартса', short_name: 'Дартс', description: 'Локальный счёт и статистика дартса',
@@ -17,7 +17,7 @@ export default defineConfig({
         { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
       ]
     },
-    workbox: { cleanupOutdatedCaches: true, importScripts: ['/sw-update.js'], navigateFallback: '/index.html', navigateFallbackDenylist: [/^\/api\//] }
+    workbox: { cleanupOutdatedCaches: true, skipWaiting: false, clientsClaim: false, importScripts: ['/sw-update.js'], navigateFallback: '/index.html', navigateFallbackDenylist: [/^\/api\//] }
   })],
   define: { __BUILD_REVISION__: JSON.stringify(buildRevision) },
   test: {

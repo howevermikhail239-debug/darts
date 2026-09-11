@@ -10,5 +10,7 @@ export interface GameRules {
   evaluateDraft(draft: VisitDraft, match: Match): DraftEvaluation;
   applyConfirmedVisit(visit: Visit, match: Match): Match;
   startExtraRound(match: Match): Match;
+  /** Whether the match may be closed as a draw right now; `completeDraw` throws when it is false. */
+  canCompleteDraw(match: Match): boolean;
   completeDraw(match: Match, now: string): Match;
 }

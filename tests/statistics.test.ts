@@ -63,6 +63,15 @@ describe("statistics projections", () => {
     expect(stats.resultSpread).toBe(0);
   });
 
+  it("charges a bust the full three darts so that busting earlier cannot improve the average", () => {
+    const scored = visit("v1", "a", [numberThrow(20, 1), numberThrow(20, 1), numberThrow(20, 1)], { awarded: 60 });
+    const early = statisticsForVisits([scored, visit("v2", "a", [numberThrow(20, 3)], { awarded: 0, result: "bust" })], "a");
+    const late = statisticsForVisits([scored, visit("v3", "a", [numberThrow(20, 1), numberThrow(20, 1), numberThrow(20, 3)], { awarded: 0, result: "bust" })], "a");
+    expect(early).toMatchObject({ physicalDarts: 4, awardedPoints: 60, threeDartAverage: 30, averagePerDart: 10 });
+    expect(late).toMatchObject({ physicalDarts: 6, awardedPoints: 60, threeDartAverage: 30, averagePerDart: 10 });
+    expect(early.threeDartAverage).toBe(late.threeDartAverage);
+  });
+
   it("returns finite zeroes with no physical darts", () => {
     const stats = statisticsForVisits([], "a");
     expect([stats.averagePerDart, stats.averagePerVisit, stats.threeDartAverage, stats.resultSpread, ...stats.positions.flatMap((position) => [position.average, position.missPercent, position.triplePercent])].every(Number.isFinite)).toBe(true);

@@ -64,7 +64,7 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       ? `${match.state.startingScore} · ${match.state.format.visitsPerPlayer} подходов`
       : `${match.state.startingScore} · до победы`;
     awaitingTieDecision = phase.kind === "awaiting_tie_break";
-    canCompleteDraw = false;
+    canCompleteDraw = phase.kind === "awaiting_tie_break" && phase.round >= 2;
     inExtraRound = phase.kind === "tie_break";
     phaseLabel = phase.kind === "tie_break"
       ? `Дополнительный подход ${phase.round}`
