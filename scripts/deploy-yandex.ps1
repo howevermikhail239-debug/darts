@@ -133,6 +133,7 @@ rm -f "$archive"
 
   $remoteArguments = @($remoteArchive, $releaseStamp, $PublicUrl, $revision, [string]$KeepReleases) |
     ForEach-Object { ConvertTo-BashArgument $_ }
+  $remoteScript = $remoteScript -replace "`r`n", "`n"
   $remoteScript | ssh -i $IdentityFile -o IdentitiesOnly=yes $sshTarget "bash -s -- $($remoteArguments -join ' ')"
   if ($LASTEXITCODE -ne 0) { throw 'Remote release failed verification and was rolled back.' }
 
