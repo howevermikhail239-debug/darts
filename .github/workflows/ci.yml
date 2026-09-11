@@ -24,8 +24,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run test:server
       - run: npm run build
+      - run: npm run test:server
       - run: npm run test:pwa
 
   e2e:
