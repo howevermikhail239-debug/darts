@@ -10,6 +10,8 @@ const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, 'dist');
 const dataDir = process.env.DATA_DIR || join(root, 'data');
 const dataFile = process.env.DARTS_DATA_FILE || join(dataDir, 'dart-scorekeeper.json');
+let buildRevision = 'unknown';
+try { const version = JSON.parse(await readFile(join(dist, 'version.json'), 'utf8')); if (typeof version.revision === 'string') buildRevision = version.revision; } catch { /* A missing identifier remains visible as unknown. */ }
 let writing = Promise.resolve();
 let data = { version: 1, groups: {} };
 let storageError = false;
@@ -48,7 +50,7 @@ const validMatch = x => x && typeof x === 'object' && typeof x.id === 'string' &
 const mime = p => p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.webmanifest') ? 'application/manifest+json' : p.endsWith('.json') ? 'application/json' : p.endsWith('.svg') ? 'image/svg+xml' : p.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
 createServer(async (req, res) => { try {
   const url = new URL(req.url, 'http://localhost'); const parts = url.pathname.split('/').filter(Boolean);
-  if (url.pathname === '/healthz' && req.method === 'GET') return send(res, storageError ? 503 : 200, { status: storageError ? 'unavailable' : 'ok' });
+  if (url.pathname === '/healthz' && req.method === 'GET') return send(res, storageError ? 503 : 200, { status: storageError ? 'unavailable' : 'ok', revision: buildRevision });
   if (storageError && url.pathname.startsWith('/api/')) return send(res, 503, { error: 'unavailable' });
   if (url.pathname === '/api/groups' && req.method === 'POST') { const b = await readJson(req); if (b.name !== undefined && !validName(b.name)) return send(res, 400, { error: 'invalid_group' }); const token = randomBytes(32).toString('base64url'); const now = new Date().toISOString(); await transact(next => { next.groups[tokenHash(token)] = { id: randomUUID(), name: b.name?.trim() || '', createdAt: now, players: {}, matches: {} }; }); return send(res, 201, { token, group: { name: b.name?.trim() || '', createdAt: now } }); }
   if (parts[0] === 'api' && parts[1] === 'groups' && parts[2]) { const g = group(parts[2]); if (!g) return send(res, 404, { error: 'not_found' }); if (parts.length === 3 && req.method === 'GET') return send(res, 200, { group: { name: g.name, createdAt: g.createdAt }, players: Object.values(g.players), matches: Object.values(g.matches) });
@@ -66,6 +68,7 @@ createServer(async (req, res) => { try {
   try { path = decodeURIComponent(url.pathname); } catch { return send(res, 400, { error: 'bad_path' }); }
   const target = resolve(dist, `.${path === '/' ? '/index.html' : path}`);
   if (target !== dist && !target.startsWith(`${dist}${sep}`)) return send(res, 404, { error: 'not_found' });
-  try { const file = await readFile(target); res.writeHead(200, { 'content-type': mime(target) }); res.end(file); }
-  catch { if (extname(path)) return send(res, 404, { error: 'not_found' }); const html = await readFile(join(dist, 'index.html')); res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html); }
+  const cacheControl = target.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache';
+  try { const file = await readFile(target); res.writeHead(200, { 'content-type': mime(target), 'cache-control': cacheControl }); res.end(file); }
+  catch { if (extname(path)) return send(res, 404, { error: 'not_found' }); const html = await readFile(join(dist, 'index.html')); res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' }); res.end(html); }
 } catch (e) { if (e.message === 'storage_unavailable') return send(res, 503, { error: 'unavailable' }); send(res, e.message === 'too_large' ? 413 : 400, { error: 'bad_request' }); } }).listen(Number(process.env.PORT || 4173), '0.0.0.0', () => console.log(`Dart Scorekeeper: http://0.0.0.0:${process.env.PORT || 4173}`));

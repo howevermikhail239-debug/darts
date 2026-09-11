@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:server": "node --test tests/server-api.test.mjs",
+    "test:pwa": "node --test tests/pwa-build.test.mjs",
     "typecheck": "tsc -b --pretty false",
     "test:e2e": "playwright test",
     "lint": "eslint ."

@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   IndexedDbMatchRepository,
+  IndexedDbPlayerRepository,
   clearLocalData,
 } from "../src/infrastructure/persistence/IndexedDbRepositories";
 import { createMatch } from "../src/domain/match/createMatch";
@@ -177,6 +178,17 @@ describe("IndexedDB repository", () => {
     await putRawHistory(valid);
     await putRawHistory({ ...valid, id: "broken-history", state: { ...valid.state, kind: "unknown" } });
     expect((await repo.listHistory()).map((match) => match.id)).toEqual(["valid-history"]);
+  });
+  it("deleting a profile never mutates immutable historical participants", async () => {
+    const matches = new IndexedDbMatchRepository();
+    const players = new IndexedDbPlayerRepository();
+    const player = { id: "a", name: "Анна", createdAt: "2026-09-11T12:00:00.000Z" };
+    const historical = createMatch("profile-history", ["a", "b"], { mode: "x01", format: { kind: "unlimited" }, startingPlayerIndex: 0 }, player.createdAt);
+    await players.save(player);
+    await putRawHistory(historical);
+    await players.delete(player.id);
+    expect((await matches.listHistory())[0]?.players).toEqual(["a", "b"]);
+    expect((await matches.listHistory())[0]?.participantNames.a).toBe("Игрок 1");
   });
   it("restores a completed Fixed Visits match whose regulation phase has no artificial round", async () => {
     const repo = new IndexedDbMatchRepository();

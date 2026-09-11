@@ -10,7 +10,9 @@ import { statisticsForMatch } from "../src/domain/statistics/StatisticsCalculato
 class MemoryRepo implements MatchRepository {
   active: ActiveMatchRecord | undefined;
   history: import("../src/domain/match/models").Match[] = [];
+  saveCalls = 0;
   async saveActive(r: ActiveMatchRecord) {
+    this.saveCalls += 1;
     this.active = structuredClone(r);
   }
   async loadActive() {
@@ -217,6 +219,50 @@ describe("GameSession", () => {
     await pending;
     expect(session.snapshot().match.confirmedVisits).toHaveLength(1);
   });
+  it("serializes rapid dart entry while persistence is pending", async () => {
+    const repo = new DeferredRepo();
+    const match = createMatch("rapid-entry", ["a", "b"], { mode: "x01", format: { kind: "unlimited" }, startingPlayerIndex: 0 }, clock());
+    const session = new GameSession(match, repo, id, clock);
+    repo.defer = true;
+    const first = session.record(numberThrow(20, 3));
+    expect(session.snapshot()).toMatchObject({ draft: { darts: [] }, isConfirming: true });
+    await expect(session.record(numberThrow(19, 3))).rejects.toThrow("Подтверждение уже выполняется");
+    repo.release?.();
+    await first;
+    expect(session.snapshot()).toMatchObject({ draft: { darts: [numberThrow(20, 3)] }, isConfirming: false });
+    expect(repo.active?.draft.draft.darts).toEqual([numberThrow(20, 3)]);
+    expect(repo.saveCalls).toBe(1);
+  });
+  it("runs one persistence side effect for a rapid double confirm", async () => {
+    const repo = new DeferredRepo();
+    const match = createMatch("double-confirm", ["a", "b"], { mode: "fixed_visits", visitsPerPlayer: 5, startingPlayerIndex: 0 }, clock());
+    const session = new GameSession(match, repo, id, clock);
+    await session.record(miss()); await session.record(miss()); await session.record(miss());
+    const before = repo.saveCalls;
+    repo.defer = true;
+    const first = session.confirm();
+    const second = await session.confirm();
+    expect(second).toMatchObject({ isConfirming: true, match: { confirmedVisits: [] } });
+    expect(repo.saveCalls).toBe(before);
+    repo.release?.();
+    await first;
+    expect(repo.saveCalls).toBe(before + 1);
+    expect(session.snapshot().match.confirmedVisits).toHaveLength(1);
+  });
+  it.each([2, 3, 4])("completes repeated Fixed Visits extra rounds across %i players", async (count) => {
+    const ids = Array.from({ length: count }, (_, index) => `extra-${index}`);
+    const repo = new MemoryRepo();
+    const match = createMatch("extra-rounds", ids, { mode: "fixed_visits", visitsPerPlayer: 1, startingPlayerIndex: count - 1 }, clock());
+    const session = new GameSession(match, repo, id, clock);
+    const visit = async (score: boolean) => { await session.record(score ? numberThrow(20, 3) : miss()); await session.record(miss()); await session.record(miss()); await session.confirm(); };
+    for (let index = 0; index < count; index += 1) await visit(false);
+    await session.extraRound();
+    for (let index = 0; index < count; index += 1) await visit(false);
+    expect(session.snapshot().match.state).toMatchObject({ phase: { kind: "awaiting_tie_decision", round: 2 } });
+    await session.extraRound();
+    for (let index = 0; index < count; index += 1) await visit(index === 0);
+    expect(session.snapshot().match).toMatchObject({ status: "completed", winnerId: ids[count - 1] });
+  });
   it.each([2, 3, 5, 8])("cycles turns across %i players", async (count) => {
     const ids = Array.from({ length: count }, (_, index) => `p${index}`);
     const repo = new MemoryRepo();
@@ -336,6 +382,26 @@ describe("GameSession", () => {
     await session.record(numberThrow(20, 1));
     expect(session.snapshot().draft.darts).toEqual([numberThrow(20, 1)]);
     expect(repo.active?.draft.draft.darts).toEqual([numberThrow(20, 1)]);
+  });
+  it("fails fast on a missing X01 remaining score and never persists NaN", async () => {
+    const repo = new MemoryRepo();
+    const base = createMatch("corrupt-x01", ["a", "b"], { mode: "x01", format: { kind: "unlimited" }, startingPlayerIndex: 0 }, clock());
+    if (base.state.kind !== "x01") throw new Error("test setup");
+    const corrupt = { ...base, state: { ...base.state, remaining: { b: 501 } } } as import("../src/domain/match/models").Match;
+    const session = new GameSession(corrupt, repo, id, clock);
+    await expect(session.record(numberThrow(20, 1))).rejects.toThrow("Нет счёта текущего игрока");
+    expect(repo.active).toBeUndefined();
+  });
+  it("fails fast on a missing Fixed Visits total without persisting a phantom winner", async () => {
+    const repo = new MemoryRepo();
+    const base = createMatch("corrupt-fixed", ["a", "b"], { mode: "fixed_visits", visitsPerPlayer: 1, startingPlayerIndex: 0 }, clock());
+    if (base.state.kind !== "fixed_visits") throw new Error("test setup");
+    const corrupt = { ...base, state: { ...base.state, totals: { b: 0 } } } as import("../src/domain/match/models").Match;
+    const session = new GameSession(corrupt, repo, id, clock);
+    await session.record(miss()); await session.record(miss()); await session.record(miss());
+    await expect(session.confirm()).rejects.toThrow("Некорректный итог игрока");
+    expect(repo.active?.current.confirmedVisits).toHaveLength(0);
+    expect(JSON.stringify(repo.active)).not.toContain("null");
   });
   it("restores a two-dart draft without applying it and can confirm it", async () => {
     const repo = new MemoryRepo();

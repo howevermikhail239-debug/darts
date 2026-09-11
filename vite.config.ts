@@ -2,9 +2,12 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const nodeProcess = (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }).process;
+const buildRevision = nodeProcess?.env?.BUILD_REVISION ?? 'unknown';
+
 export default defineConfig({
-  plugins: [react(), VitePWA({
-    registerType: 'prompt',
+  plugins: [react(), { name: 'build-revision', generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ revision: buildRevision }) }); } }, VitePWA({
+    registerType: 'autoUpdate',
     includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg'],
     manifest: {
       name: 'Счётчик дартса', short_name: 'Дартс', description: 'Локальный счёт и статистика дартса',
@@ -16,6 +19,7 @@ export default defineConfig({
     },
     workbox: { cleanupOutdatedCaches: true, navigateFallback: '/index.html', navigateFallbackDenylist: [/^\/api\//] }
   })],
+  define: { __BUILD_REVISION__: JSON.stringify(buildRevision) },
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],

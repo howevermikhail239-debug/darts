@@ -86,7 +86,7 @@ function isFixedVisitsPhase(value: unknown): boolean {
     && isInteger(value.round) && value.round >= 1
     && hasOnlyKeys(value, ["kind", "round"]);
 }
-function isMatch(value: unknown): value is Match {
+export function isMatch(value: unknown): value is Match {
   if (!isRecord(value) || !isString(value.id) || !isString(value.createdAt) || !["in_progress","completed","abandoned"].includes(String(value.status)) || !isStringArray(value.players) || value.players.length < 2 || new Set(value.players).size !== value.players.length || !isInteger(value.startingPlayerIndex) || value.startingPlayerIndex < 0 || value.startingPlayerIndex >= value.players.length || !isInteger(value.currentPlayerIndex) || value.currentPlayerIndex < 0 || value.currentPlayerIndex >= value.players.length || !isRecord(value.participantNames) || !Array.isArray(value.confirmedVisits) || !isRecord(value.state)) return false;
   const matchId = value.id, players = value.players, participantNames = value.participantNames;
   if (!players.every(id => isString(participantNames[id]))) return false;

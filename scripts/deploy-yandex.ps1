@@ -12,9 +12,11 @@ $releaseStamp = Get-Date -Format 'yyyyMMddHHmmss'
 $archive = Join-Path ([System.IO.Path]::GetTempPath()) "dart-scorekeeper-$releaseStamp.tgz"
 $remoteArchive = "/tmp/dart-scorekeeper-$releaseStamp.tgz"
 $sshTarget = "$RemoteUser@$VmHost"
+$previousBuildRevision = $env:BUILD_REVISION
 
 Push-Location $projectRoot
 try {
+  $env:BUILD_REVISION = (git rev-parse HEAD).Trim()
   npm run build
   tar.exe -czf $archive dist server.mjs package.json package-lock.json deployment/yandex
   scp -i $IdentityFile -o IdentitiesOnly=yes $archive "${sshTarget}:$remoteArchive"
@@ -63,6 +65,7 @@ rm -f "$archive"
     Invoke-RestMethod -Uri "$($PublicUrl.TrimEnd('/'))/healthz" -Method Get | Out-Null
   }
 } finally {
+  if ($null -eq $previousBuildRevision) { Remove-Item Env:BUILD_REVISION -ErrorAction SilentlyContinue } else { $env:BUILD_REVISION = $previousBuildRevision }
   Pop-Location
   if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
 }

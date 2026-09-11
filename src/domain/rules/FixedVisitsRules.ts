@@ -27,19 +27,26 @@ export class FixedVisitsRules implements GameRules {
   }
   applyConfirmedVisit(visit: Visit, match: Match): Match {
     if (match.state.kind !== "fixed_visits") throw new Error("Неверный режим");
+    if (match.players.length === 0) throw new Error("Матч не содержит участников");
     const state = match.state;
     const id = visit.playerId;
     if (id !== currentPlayerId(match)) throw new Error("Визит принадлежит не текущему игроку");
+    const currentTotal = state.totals[id];
+    if (typeof currentTotal !== "number" || !Number.isFinite(currentTotal) || !Number.isInteger(currentTotal) || currentTotal < 0)
+      throw new Error("Некорректный итог игрока");
     const totals = {
       ...state.totals,
-      [id]: (state.totals[id] ?? 0) + visit.awardedScore,
+      [id]: currentTotal + visit.awardedScore,
     };
     const inExtraRound = state.phase.kind === "extra_round";
+    const currentCompleted = state.regulationCompleted[id];
+    if (!inExtraRound && (typeof currentCompleted !== "number" || !Number.isFinite(currentCompleted) || !Number.isInteger(currentCompleted) || currentCompleted < 0))
+      throw new Error("Некорректный счётчик подходов игрока");
     const regulationCompleted = inExtraRound
       ? state.regulationCompleted
       : {
           ...state.regulationCompleted,
-          [id]: (state.regulationCompleted[id] ?? 0) + 1,
+          [id]: (currentCompleted as number) + 1,
         };
     const nextIndex = (match.currentPlayerIndex + 1) % match.players.length;
     const allRegulationDone = match.players.every(
@@ -48,7 +55,12 @@ export class FixedVisitsRules implements GameRules {
     );
     const roundEnds = nextIndex === match.startingPlayerIndex;
     if (allRegulationDone && (!inExtraRound || roundEnds)) {
-      const values = match.players.map((playerId) => totals[playerId] ?? 0);
+      const values = match.players.map((playerId) => {
+        const value = totals[playerId];
+        if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value < 0)
+          throw new Error("Некорректный итог игрока");
+        return value;
+      });
       const maximum = Math.max(...values);
       const tied = values.filter((value) => value === maximum).length > 1;
       const extraRoundsCompleted = inExtraRound

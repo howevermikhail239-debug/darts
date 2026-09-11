@@ -11,12 +11,21 @@ const playerIndex = (match: Match, playerId: PlayerId): number => {
   return index;
 };
 
+const requiredScore = (scores: Readonly<Record<PlayerId, number>>, playerId: PlayerId, label: string): number => {
+  const score = scores[playerId];
+  if (typeof score !== 'number' || !Number.isFinite(score) || !Number.isInteger(score) || score < 0)
+    throw new Error(`Некорректный ${label} игрока`);
+  return score;
+};
+
 const leadersByMinimumRemaining = (
   state: X01State,
   playerIds: readonly PlayerId[],
 ): readonly PlayerId[] => {
-  const minimum = Math.min(...playerIds.map(id => state.remaining[id] ?? state.startingScore));
-  return playerIds.filter(id => (state.remaining[id] ?? state.startingScore) === minimum);
+  if (playerIds.length === 0) throw new Error('Нельзя определить лидера без участников');
+  const scores = playerIds.map(id => requiredScore(state.remaining, id, 'остаток'));
+  const minimum = Math.min(...scores);
+  return playerIds.filter((_, index) => scores[index] === minimum);
 };
 
 const orderedFromStarter = (match: Match, playerIds: readonly PlayerId[]): readonly PlayerId[] => {
@@ -87,9 +96,9 @@ export class X01Rules implements GameRules {
     if (playerId !== currentPlayerId(match)) throw new Error('Визит принадлежит не текущему игроку');
     const remaining = state.phase.kind === 'tie_break' || visit.result === 'bust'
       ? state.remaining
-      : { ...state.remaining, [playerId]: (state.remaining[playerId] ?? state.startingScore) - visit.awardedScore };
+      : { ...state.remaining, [playerId]: requiredScore(state.remaining, playerId, 'остаток') - visit.awardedScore };
     const visitsCompleted = state.phase.kind === 'regulation'
-      ? { ...state.visitsCompleted, [playerId]: (state.visitsCompleted[playerId] ?? 0) + 1 }
+      ? { ...state.visitsCompleted, [playerId]: requiredScore(state.visitsCompleted, playerId, 'счётчик подходов') + 1 }
       : state.visitsCompleted;
     const nextState = { ...state, remaining, visitsCompleted } as X01State;
 
@@ -112,14 +121,17 @@ export class X01Rules implements GameRules {
           confirmedVisits: [...match.confirmedVisits, visit],
         };
       }
-      const bestScore = Math.max(...state.phase.playerIds.map(id => roundScores[id] ?? 0));
-      const leaders = state.phase.playerIds.filter(id => (roundScores[id] ?? 0) === bestScore);
+      if (state.phase.playerIds.length === 0) throw new Error('Нет участников дополнительного подхода');
+      const bestScore = Math.max(...state.phase.playerIds.map(id => requiredScore(roundScores, id, 'результат дополнительного подхода')));
+      const leaders = state.phase.playerIds.filter(id => requiredScore(roundScores, id, 'результат дополнительного подхода') === bestScore);
       if (leaders.length === 1) return completedMatch(match, roundFinishedState, visit, leaders[0]!);
       const ordered = orderedFromStarter(match, leaders);
+      const first = ordered[0];
+      if (!first) throw new Error('Не удалось определить лидера дополнительного подхода');
       return {
         ...match,
         state: { ...roundFinishedState, phase: { kind: 'awaiting_tie_break', playerIds: ordered, round: state.phase.round + 1 } },
-        currentPlayerIndex: playerIndex(match, ordered[0]!),
+        currentPlayerIndex: playerIndex(match, first),
         confirmedVisits: [...match.confirmedVisits, visit],
       };
     }
@@ -134,10 +146,12 @@ export class X01Rules implements GameRules {
         const leaders = leadersByMinimumRemaining(nextState, match.players);
         if (leaders.length === 1) return completedMatch(match, nextState, visit, leaders[0]!);
         const ordered = orderedFromStarter(match, leaders);
+        const first = ordered[0];
+        if (!first) throw new Error('Не удалось определить лидера матча');
         return {
           ...match,
           state: { ...nextState, phase: { kind: 'awaiting_tie_break', playerIds: ordered, round: 1 } },
-          currentPlayerIndex: playerIndex(match, ordered[0]!),
+          currentPlayerIndex: playerIndex(match, first),
           confirmedVisits: [...match.confirmedVisits, visit],
         };
       }

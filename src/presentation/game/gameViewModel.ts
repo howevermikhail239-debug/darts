@@ -41,10 +41,17 @@ export type GameViewModel = Readonly<{
 const displayName = (match: Match, players: readonly Player[], playerId: PlayerId): string =>
   players.find((player) => player.id === playerId)?.name ?? match.participantNames[playerId] ?? "Игрок";
 
+const visitProgress = (values: readonly (number | undefined)[], total: number): string => {
+  if (values.length === 0 || values.some((value) => typeof value !== "number" || !Number.isFinite(value)))
+    return "Состояние матча повреждено";
+  return `Подход ${Math.min(...(values as number[])) + 1} из ${total}`;
+};
+
 export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Player[], persistentPlayerIds: readonly PlayerId[] = players.map((player) => player.id)): GameViewModel {
   const match = snapshot.match;
   const stats = statisticsForMatch(match);
-  const currentPlayerId = match.players[match.currentPlayerIndex]!;
+  const currentPlayerId = match.players[match.currentPlayerIndex];
+  if (!currentPlayerId) throw new Error("Некорректный текущий игрок матча");
   let title: string;
   let phaseLabel: string;
   let awaitingTieDecision: boolean;
@@ -64,7 +71,7 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       : awaitingTieDecision
         ? "Ничья по минимальному остатку"
         : match.state.format.kind === "limited"
-          ? `Подход ${Math.min(...Object.values(match.state.visitsCompleted)) + 1} из ${match.state.format.visitsPerPlayer}`
+          ? visitProgress(match.players.map((id) => match.state.kind === "x01" ? match.state.visitsCompleted[id] : undefined), match.state.format.visitsPerPlayer)
           : "Точный выход в 0";
   } else {
     const phase = match.state.phase;
@@ -76,7 +83,7 @@ export function toGameViewModel(snapshot: SessionSnapshot, players: readonly Pla
       ? `Дополнительный подход ${phase.round}`
       : awaitingTieDecision
         ? "Ничья после основных подходов"
-        : `Подход ${Math.min(...Object.values(match.state.regulationCompleted)) + 1} из ${match.state.visitsPerPlayer}`;
+        : visitProgress(match.players.map((id) => match.state.kind === "fixed_visits" ? match.state.regulationCompleted[id] : undefined), match.state.visitsPerPlayer);
   }
 
   const scoreboard = match.players.map((playerId, index): ScoreboardRowViewModel => {

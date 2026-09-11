@@ -75,6 +75,13 @@ describe("GameViewModel", () => {
     expect(view.draftHint).toBe("Введите все три физических дротика");
   });
 
+  it("shows a diagnostic label instead of Infinity for a corrupt visit counter", () => {
+    const match = fixed();
+    if (match.state.kind !== "fixed_visits") throw new Error("fixture");
+    const corrupt = { ...match, state: { ...match.state, regulationCompleted: {} } } as Match;
+    expect(toGameViewModel(snapshot(corrupt), players).phaseLabel).toBe("Состояние матча повреждено");
+  });
+
   it("maps a fixed-visits tie decision", () => {
     const match = fixed();
     if (match.state.kind !== "fixed_visits") throw new Error("fixture");

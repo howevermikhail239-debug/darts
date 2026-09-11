@@ -22,6 +22,10 @@ test('companies isolate data, preserve stable players and idempotent immutable m
     server = await start(file);
     const manifest = await fetch(`${server.url}/manifest.webmanifest`);
     assert.equal(manifest.status, 200); assert.match(manifest.headers.get('content-type') ?? '', /^application\/manifest\+json/);
+    assert.equal(manifest.headers.get('cache-control'), 'no-cache');
+    const index = await fetch(`${server.url}/`); assert.equal(index.headers.get('cache-control'), 'no-cache');
+    const indexText = await index.text(); const assetPath = indexText.match(/\/assets\/[^"']+\.js/)?.[0];
+    assert.ok(assetPath); assert.equal((await fetch(`${server.url}${assetPath}`)).headers.get('cache-control'), 'public, max-age=31536000, immutable');
     const a = await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Дартс' }) });
     const b = await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Другая' }) });
     assert.equal(a.status, 201); assert.match(a.body.token, /^[A-Za-z0-9_-]{43}$/); assert.notEqual(a.body.token, b.body.token);
@@ -54,7 +58,7 @@ test('DATA_DIR selects a writable storage directory and health reports readiness
   try {
     server = await start(undefined, { DATA_DIR: dir, DARTS_DATA_FILE: '' });
     const health = await json(`${server.url}/healthz`);
-    assert.deepEqual(health, { status: 200, body: { status: 'ok' } });
+    assert.equal(health.status, 200); assert.equal(health.body.status, 'ok'); assert.equal(typeof health.body.revision, 'string');
     assert.equal((await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Production' }) })).status, 201);
     const stored = JSON.parse(await readFile(join(dir, 'dart-scorekeeper.json'), 'utf8'));
     assert.equal(Object.keys(stored.groups).length, 1);
@@ -90,7 +94,7 @@ test('health reports unavailable without replacing corrupt storage', async () =>
   try {
     await writeFile(file, '{corrupt', 'utf8');
     server = await start(file);
-    assert.deepEqual(await json(`${server.url}/healthz`), { status: 503, body: { status: 'unavailable' } });
+    const health = await json(`${server.url}/healthz`); assert.equal(health.status, 503); assert.equal(health.body.status, 'unavailable'); assert.equal(typeof health.body.revision, 'string');
     assert.equal((await json(`${server.url}/api/groups`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 503);
     assert.equal(await readFile(file, 'utf8'), '{corrupt');
   } finally { if (server) await stop(server.child); await rm(dir, { recursive: true, force: true }); }
@@ -107,7 +111,7 @@ test('runtime persistence failure returns 503 without committing phantom state',
     await writeFile(dataDir, 'blocks-directory-creation', 'utf8');
     const failed = await json(`${server.url}/api/groups/${created.body.token}/players`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Not persisted' }) });
     assert.deepEqual(failed, { status: 503, body: { error: 'unavailable' } });
-    assert.deepEqual(await json(`${server.url}/healthz`), { status: 503, body: { status: 'unavailable' } });
+    const health = await json(`${server.url}/healthz`); assert.equal(health.status, 503); assert.equal(health.body.status, 'unavailable'); assert.equal(typeof health.body.revision, 'string');
     const durable = JSON.parse(await readFile(durableCopy, 'utf8'));
     assert.equal(Object.values(durable.groups)[0].players && Object.keys(Object.values(durable.groups)[0].players).length, 0);
   } finally { if (server) await stop(server.child); await rm(rootDir, { recursive: true, force: true }); }
