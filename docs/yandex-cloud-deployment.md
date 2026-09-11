@@ -63,7 +63,15 @@ Expected total at low traffic: about `1.078 ₽/hour`, `25.87 ₽/day`, `776.16 
 - Immutable releases: `/opt/dart-scorekeeper/releases/<timestamp>`.
 - Production JSON: `/var/lib/dart-scorekeeper/dart-scorekeeper.json`.
 - Backups: `/var/lib/dart-scorekeeper/backups/`.
-- Timer: `dart-scorekeeper-backup.timer`, every six hours, retaining the newest 25 copies.
+- Timer: `dart-scorekeeper-backup.timer`, every six hours, retaining 24 newest, 14 daily, and 6 monthly copies.
+
+## Audit hardening notes
+
+- Requests are logged as structured JSON. Group tokens and secret URL segments are never logged; only a short non-reversible token hash may be used for correlation.
+- The generated API Gateway template is an operator artefact and must be regenerated from the deployment inputs; do not commit live tokens or credentials.
+- Company updates use `If-Match`; a stale writer receives a conflict and must reload before retrying.
+- Every local backup is validated before retention and accompanied by a SHA-256 checksum.
+- Off-disk disaster recovery requires an owner-approved Object Storage bucket or snapshot service, a write-only service account, credential rotation, object lock, and lifecycle policy. This repository deliberately does not create external cloud resources because the required account and credentials are environment-owned.
 - Mount: ext4 by UUID in `/etc/fstab` at `/var/lib/dart-scorekeeper`.
 
 The data directory is outside every release. Deployment never copies an empty JSON over production data.
