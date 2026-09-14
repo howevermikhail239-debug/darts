@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Dialog } from '../components/Dialog';
 import type { Player } from '../../domain/match/models';
 import { userMessage } from '../errors/userMessage';
+import { PlayerIdentity } from '../components/PlayerIdentity';
 
 type Props = {
   players: readonly Player[];
@@ -111,21 +112,31 @@ export function SettingsPage({
         </section>
       ) : null}
       <section className="setup-form player-management">
-        <h2>Игроки</h2>
+        <div className="settings-section-heading">
+          <div>
+            <h2>Профили игроков</h2>
+            <p>Имена и статистика постоянных участников</p>
+          </div>
+          <strong>{players.length}</strong>
+        </div>
         {players.length === 0 ? (
           <p>Сохранённых игроков пока нет.</p>
         ) : (
           players.map((player) => (
-            <article key={player.id}>
-              <label>
-                Имя
-                <input
-                  maxLength={80}
-                  value={nameFieldOf(player)}
-                  onChange={(event) => setEdits((current) => ({ ...current, [player.id]: event.target.value }))}
-                />
-              </label>
-              <div>
+            <article key={player.id} className="profile-management-card">
+              <header className="profile-management-heading">
+                <PlayerIdentity playerId={player.id} name={player.name} compact />
+                <small>Постоянный профиль</small>
+              </header>
+              <div className="profile-edit">
+                <label>
+                  Имя
+                  <input
+                    maxLength={80}
+                    value={nameFieldOf(player)}
+                    onChange={(event) => setEdits((current) => ({ ...current, [player.id]: event.target.value }))}
+                  />
+                </label>
                 <button
                   className="secondary"
                   disabled={busy || !nameFieldOf(player).trim() || nameFieldOf(player).trim() === player.name}
@@ -141,21 +152,25 @@ export function SettingsPage({
                       .finally(() => setBusy(false));
                   }}
                 >
-                  Переименовать
+                  Сохранить имя
                 </button>
+              </div>
+              <div className="profile-management-actions">
+                <div>
+                  <b>Статистика</b>
+                  <small>История матчей при этих действиях сохраняется</small>
+                </div>
                 <button className="secondary" disabled={busy} onClick={() => setPending({ kind: 'reset', player })}>
                   Обнулить статистику
                 </button>
-                <button
-                  className="danger-button"
-                  disabled={busy}
-                  onClick={() => setPending({ kind: 'delete', player })}
-                >
+                <button className="danger-quiet" disabled={busy} onClick={() => setPending({ kind: 'delete', player })}>
                   Удалить профиль
                 </button>
               </div>
               {player.statsResetAt ? (
-                <small>Статистика считается заново с {new Date(player.statsResetAt).toLocaleString('ru-RU')}</small>
+                <small className="profile-reset-note">
+                  Статистика считается заново с {new Date(player.statsResetAt).toLocaleString('ru-RU')}
+                </small>
               ) : null}
             </article>
           ))
