@@ -4,6 +4,7 @@ import { domainError } from '../errors';
 export type PlayerId = string;
 export type MatchId = string;
 export type MatchStatus = 'in_progress' | 'completed' | 'abandoned';
+export type OutRule = 'straight' | 'double' | 'master';
 export type Player = Readonly<{ id: PlayerId; name: string; createdAt: string; statsResetAt?: string }>;
 export type VisitResult = 'scored' | 'bust' | 'match_won' | 'tie_pending';
 export type VisitContext = Readonly<{ scores: Readonly<Record<PlayerId, number>>; currentPlayerIndex: number }>;
@@ -47,7 +48,7 @@ export type X01Phase =
 export type X01State = Readonly<{
   kind: 'x01';
   startingScore: 301 | 501 | 701;
-  outRule: 'straight' | 'double';
+  outRule: OutRule;
   format: X01Format;
   remaining: Readonly<Record<PlayerId, number>>;
   visitsCompleted: Readonly<Record<PlayerId, number>>;

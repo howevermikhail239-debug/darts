@@ -199,7 +199,7 @@ export function isStoredMatch(value: unknown): value is Match {
   if (state.kind === 'x01') {
     if (
       (state.startingScore !== 301 && state.startingScore !== 501 && state.startingScore !== 701) ||
-      (state.outRule !== 'straight' && state.outRule !== 'double') ||
+      (state.outRule !== 'straight' && state.outRule !== 'double' && state.outRule !== 'master') ||
       !isRecord(state.format) ||
       !isPlayerNumberRecord(state.remaining, players, 0) ||
       !isPlayerNumberRecord(state.visitsCompleted, players, 0) ||

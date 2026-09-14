@@ -96,7 +96,11 @@ export function toGameViewModel(
                 match.players.map((id) => (match.state.kind === 'x01' ? match.state.visitsCompleted[id] : undefined)),
                 match.state.format.visitsPerPlayer,
               )
-            : 'Точный выход в 0';
+            : match.state.outRule === 'double'
+              ? 'Закрытие удвоением или Bull'
+              : match.state.outRule === 'master'
+                ? 'Закрытие удвоением, утроением или Bull'
+                : 'Точный выход в 0';
   } else {
     const phase = match.state.phase;
     title = `Серия · ${match.state.visitsPerPlayer} подходов`;

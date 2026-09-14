@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bull, isDouble, numberThrow, outerBull, scoreOf, type DartThrow } from '../src/domain/darts/DartThrow';
+import type { OutRule } from '../src/domain/match/models';
 import { checkoutSuggestion } from '../src/domain/rules/checkoutSuggestion';
 
 /** Every dart that can actually score, used as an independent reference solver. */
@@ -11,9 +12,11 @@ const allDarts: readonly DartThrow[] = [
   bull(),
 ];
 
-const reachable = (score: number, darts: number, outRule: 'straight' | 'double'): boolean => {
+const masterFinish = (dart: DartThrow) => isDouble(dart) || (dart.kind === 'number' && dart.multiplier === 3);
+const reachable = (score: number, darts: number, outRule: OutRule): boolean => {
   if (score < 1 || darts < 1) return false;
-  const finishers = outRule === 'double' ? allDarts.filter(isDouble) : allDarts;
+  const finishers =
+    outRule === 'double' ? allDarts.filter(isDouble) : outRule === 'master' ? allDarts.filter(masterFinish) : allDarts;
   const search = (remaining: number, left: number): boolean => {
     if (left === 1) return finishers.some((dart) => scoreOf(dart) === remaining);
     return (
@@ -38,7 +41,7 @@ describe('checkout suggestions (DOM-8)', () => {
     const missing: Gap[] = [],
       invalid: Gap[] = [],
       surplus: Gap[] = [];
-    for (const outRule of ['straight', 'double'] as const)
+    for (const outRule of ['straight', 'double', 'master'] as const)
       for (let score = 1; score <= 180; score += 1)
         for (let darts = 1; darts <= 3; darts += 1) {
           const route = checkoutSuggestion(score, darts, outRule);
@@ -54,6 +57,7 @@ describe('checkout suggestions (DOM-8)', () => {
             sum !== score ||
             route.length > darts ||
             (outRule === 'double' && !isDouble(last)) ||
+            (outRule === 'master' && !masterFinish(last)) ||
             route.some((dart) => dart.kind === 'miss')
           )
             invalid.push({ score, darts, outRule });

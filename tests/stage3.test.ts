@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { bull, miss, numberThrow, outerBull } from '../src/domain/darts/DartThrow';
 import { createMatch } from '../src/domain/match/createMatch';
 import { addDraftThrow, emptyDraft } from '../src/domain/match/VisitDraft';
-import type { Match } from '../src/domain/match/models';
+import type { Match, OutRule } from '../src/domain/match/models';
 import { X01Rules } from '../src/domain/rules/X01Rules';
 import { GameSession } from '../src/application/GameSession';
 import type { ActiveMatchRecord, MatchRepository } from '../src/application/ports/repositories';
@@ -19,7 +19,7 @@ import {
 
 const now = '2026-09-08T12:00:00.000Z';
 const detailed = (...darts: ReturnType<typeof miss>[]) => darts.reduce(addDraftThrow, emptyDraft());
-function near(score: number, outRule: 'straight' | 'double' = 'straight'): Match {
+function near(score: number, outRule: OutRule = 'straight'): Match {
   const match = createMatch(
     'm',
     ['a', 'b'],
@@ -89,6 +89,15 @@ describe('Stage 3 X01', () => {
     );
     expect(rules.evaluateDraft(detailed(numberThrow(1, 1)), near(2, 'double')).status).toBe('bust');
     expect(rules.evaluateDraft(detailed(numberThrow(20, 3)), near(40, 'double')).status).toBe('bust');
+  });
+  it('supports master-out finishes on a double, triple or Bull', () => {
+    expect(rules.evaluateDraft(detailed(numberThrow(20, 3)), near(60, 'master')).status).toBe('match_won');
+    expect(rules.evaluateDraft(detailed(numberThrow(20, 2)), near(40, 'master')).status).toBe('match_won');
+    expect(rules.evaluateDraft(detailed(bull()), near(50, 'master')).status).toBe('match_won');
+    expect(rules.evaluateDraft(detailed(numberThrow(20, 1), numberThrow(20, 1)), near(40, 'master'))).toMatchObject({
+      status: 'bust',
+      awardedScore: 0,
+    });
   });
   it('keeps real hits but awards zero on a double-out bust', async () => {
     const repo = new MemoryRepo();

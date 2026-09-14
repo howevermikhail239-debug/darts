@@ -6,7 +6,7 @@ import {
   type LastSetupTemplate,
   type RestoredSetupParticipant,
 } from '../../application/LastSetup';
-import type { Player } from '../../domain/match/models';
+import type { OutRule, Player } from '../../domain/match/models';
 import type { TodaySummary } from '../../domain/statistics/todaySummary';
 import { PlayerIdentity } from '../components/PlayerIdentity';
 import { Dialog } from '../components/Dialog';
@@ -69,7 +69,7 @@ export function SetupPage({
   const [startingScore, setStartingScore] = useState<301 | 501 | 701>(
     restored?.mode === 'x01' ? (restored.startingScore ?? 501) : 501,
   );
-  const [outRule, setOutRule] = useState<'straight' | 'double'>(
+  const [outRule, setOutRule] = useState<OutRule>(
     restored?.mode === 'x01' ? (restored.outRule ?? 'straight') : 'straight',
   );
   const [visits, setVisits] = useState(restoredVisits);
@@ -707,8 +707,8 @@ type GameModeSelectorProps = {
   onMode: (mode: 'x01' | 'fixed_visits') => void;
   startingScore: 301 | 501 | 701;
   onStartingScore: (score: 301 | 501 | 701) => void;
-  outRule: 'straight' | 'double';
-  onOutRule: (rule: 'straight' | 'double') => void;
+  outRule: OutRule;
+  onOutRule: (rule: OutRule) => void;
   x01Format: 'unlimited' | 'limited';
   onX01Format: (format: 'unlimited' | 'limited') => void;
   visits: number;
@@ -771,7 +771,7 @@ function GameModeSelector({
           </fieldset>
           <fieldset>
             <legend>Завершение</legend>
-            <div className="segments">
+            <div className="segments three">
               <button
                 type="button"
                 className={outRule === 'straight' ? 'selected' : ''}
@@ -786,11 +786,20 @@ function GameModeSelector({
               >
                 Удвоением
               </button>
+              <button
+                type="button"
+                className={outRule === 'master' ? 'selected' : ''}
+                onClick={() => onOutRule('master')}
+              >
+                Master out
+              </button>
             </div>
             <p className="hint">
               {outRule === 'straight'
                 ? 'Для победы достаточно получить ровно 0.'
-                : 'Последний дротик должен попасть в удвоение или Bull.'}
+                : outRule === 'double'
+                  ? 'Последний дротик должен попасть в удвоение или Bull.'
+                  : 'Последний дротик должен попасть в удвоение, утроение или Bull.'}
             </p>
           </fieldset>
           <fieldset>

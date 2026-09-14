@@ -10,7 +10,7 @@ import {
   statisticsForPlayerHistory,
 } from '../src/domain/statistics/StatisticsCalculator';
 
-const route = (score: number, darts = 3, rule: 'straight' | 'double' = 'double') =>
+const route = (score: number, darts = 3, rule: 'straight' | 'double' | 'master' = 'double') =>
   checkoutSuggestion(score, darts, rule)?.map(notationOf).join(' · ');
 const at = (day: number) => `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`;
 function makeVisit(id: string, playerId: string, darts: readonly DartThrow[]): Visit {
@@ -70,8 +70,15 @@ describe('checkout suggestions', () => {
     expect(route(100, 1)).toBeUndefined();
     expect(route(100, 2)).toBe('T20 · D20');
     expect(route(40, 1)).toBe('D20');
-    expect(route(40, 3, 'straight')).toBe('D20');
+    expect(route(40, 3, 'straight')).toBe('S20 · S20');
     expect(route(1, 1, 'straight')).toBe('S1');
+  });
+
+  it('ranks practical routes separately from mathematical reachability', () => {
+    expect(route(30, 3, 'straight')).toBe('S20 · S10');
+    expect(route(50, 2, 'double')).toBe('S10 · D20');
+    expect(route(60, 1, 'master')).toBe('T20');
+    expect(route(60, 1, 'double')).toBeUndefined();
   });
 });
 

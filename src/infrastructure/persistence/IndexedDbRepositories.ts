@@ -218,7 +218,7 @@ function isLastSetup(value: unknown): value is LastSetupTemplate {
   if (
     value.setup.mode !== 'x01' ||
     ![301, 501, 701].includes(Number(value.setup.startingScore)) ||
-    !['straight', 'double'].includes(String(value.setup.outRule)) ||
+    !['straight', 'double', 'master'].includes(String(value.setup.outRule)) ||
     !isRecord(value.setup.format)
   )
     return false;

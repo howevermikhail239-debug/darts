@@ -1,4 +1,4 @@
-import { scoreOf } from '../darts/DartThrow';
+import { isDouble, scoreOf } from '../darts/DartThrow';
 import type { VisitDraft } from '../match/VisitDraft';
 import { currentPlayerId, type Match, type PlayerId, type Visit, type X01State } from '../match/models';
 import type { DraftEvaluation, GameRules } from './GameRules';
@@ -97,7 +97,7 @@ export class X01Rules implements GameRules {
           validDartCount: 0,
           reason: 'Перебор — счёт ниже нуля',
         };
-      if (after <= (match.state.outRule === 'double' ? 1 : 0))
+      if (after <= (match.state.outRule === 'straight' ? 0 : 1))
         return {
           status: 'invalid',
           physicalDartsUsed: 3,
@@ -140,14 +140,22 @@ export class X01Rules implements GameRules {
       const points = scoreOf(dart);
       rawScore += points;
       remaining -= points;
-      const isDouble = dart.kind === 'bull' || (dart.kind === 'number' && dart.multiplier === 2);
-      if (remaining < 0 || (match.state.outRule === 'double' && (remaining === 1 || (remaining === 0 && !isDouble)))) {
+      const validFinish =
+        match.state.outRule === 'straight' ||
+        isDouble(dart) ||
+        (match.state.outRule === 'master' && dart.kind === 'number' && dart.multiplier === 3);
+      if (
+        remaining < 0 ||
+        (match.state.outRule !== 'straight' && (remaining === 1 || (remaining === 0 && !validFinish)))
+      ) {
         const reason =
           remaining < 0
             ? 'Счёт ниже нуля'
             : remaining === 1
-              ? 'Остаток 1 нельзя закрыть удвоением'
-              : 'Последний дротик должен попасть в удвоение или Bull';
+              ? `Остаток 1 нельзя закрыть ${match.state.outRule === 'master' ? 'удвоением или утроением' : 'удвоением'}`
+              : match.state.outRule === 'master'
+                ? 'Последний дротик должен попасть в удвоение, утроение или Bull'
+                : 'Последний дротик должен попасть в удвоение или Bull';
         return {
           status: 'bust',
           physicalDartsUsed: i + 1,

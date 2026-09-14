@@ -1,11 +1,11 @@
-import { MAX_PLAYERS, MIN_PLAYERS, type Match, type PlayerId } from './models';
+import { MAX_PLAYERS, MIN_PLAYERS, type Match, type OutRule, type PlayerId } from './models';
 import { domainError } from '../errors';
 
 export type MatchSetup =
   | Readonly<{
       mode: 'x01';
       startingScore?: 301 | 501 | 701;
-      outRule?: 'straight' | 'double';
+      outRule?: OutRule;
       format: Readonly<{ kind: 'unlimited' }> | Readonly<{ kind: 'limited'; visitsPerPlayer: number }>;
       startingPlayerIndex: number;
     }>
