@@ -263,6 +263,143 @@
 .comparison-selects {
   grid-template-columns: repeat(3, 1fr);
 }
+.comparison-roster {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.comparison-roster > div {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px 2px 7px;
+  scrollbar-width: thin;
+}
+.comparison-roster button {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  align-items: center;
+  max-width: 210px;
+  min-height: 44px;
+  padding: 7px 10px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.comparison-roster button.selected {
+  color: #1b1008;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.comparison-roster button .player-identity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comparison-toolbar {
+  display: grid;
+  width: min(100%, 280px);
+  margin-bottom: 12px;
+}
+.comparison-toolbar label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.comparison-toolbar select {
+  min-height: 46px;
+  padding: 0 10px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+}
+.comparison-grid {
+  display: grid;
+  gap: 10px;
+}
+.comparison-player {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.comparison-profile-link {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 0 9px;
+  color: var(--text);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+}
+.comparison-profile-link .player-identity {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comparison-profile-link > span {
+  color: var(--accent2);
+  font-size: 10px;
+}
+.comparison-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 8px;
+  background: var(--line);
+}
+.comparison-metrics > span {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 62px;
+  padding: 8px;
+  background: var(--surface);
+}
+.comparison-metrics small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.comparison-metrics b {
+  font-size: 18px;
+}
+.comparison-metrics em {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  color: var(--accent2);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.comparison-player details {
+  margin-top: 9px;
+}
+.comparison-player summary {
+  min-height: 42px;
+  padding: 12px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.secondary-metrics {
+  border-top: 1px solid var(--line);
+}
 .comparison-list {
   display: grid;
   gap: 8px;
@@ -343,6 +480,11 @@
   }
   .record-list {
     grid-template-columns: 1fr;
+  }
+}
+@media (min-width: 700px) {
+  .comparison-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .new-records {

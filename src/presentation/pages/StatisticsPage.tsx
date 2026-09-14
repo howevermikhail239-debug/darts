@@ -198,9 +198,11 @@ function Overview({
         {cards.map(({ player, stats }) => (
           <button key={player.id} className="stats-player-card" onClick={() => onSelect(player.id)}>
             <PlayerIdentity playerId={player.id} name={player.name} />
+            <Metric label="Всего матчей" value={stats.matches} />
+            <Metric label="Всего побед" value={stats.wins} />
+            <Metric label="Процент побед" value={pct(stats.winRate)} />
             <Metric label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} />
             <Metric label="Лучший подход" value={stats.bestVisit} />
-            <Metric label="Победы" value={pct(stats.winRate)} />
             <Metric label="180" value={stats.thresholds['180']} />
           </button>
         ))}
@@ -420,7 +422,10 @@ function PlayerOverview({ stats }: { stats: PlayerHistoryStatistics }) {
         <MetricCard label="Среднее за 3 дротика" value={number(stats.threeDartAverage)} />
         <MetricCard label="Среднее за дротик" value={number(stats.averagePerDart)} />
         <MetricCard label="Лучший подход" value={stats.bestVisit} />
-        <MetricCard label="Победы / поражения" value={`${stats.wins} / ${stats.losses} · ${pct(stats.winRate)}`} />
+        <MetricCard label="Всего матчей" value={stats.matches} />
+        <MetricCard label="Всего побед" value={stats.wins} />
+        <MetricCard label="Процент побед" value={pct(stats.winRate)} />
+        <MetricCard label="Поражения / ничьи" value={`${stats.losses} / ${stats.draws}`} />
         <MetricCard label="Завершённые игры" value={stats.completedGames} />
         <MetricCard label="Подходы / дротики" value={`${stats.visits} / ${stats.physicalDarts}`} />
         <MetricCard label="Raw очки" value={stats.rawPoints} />
@@ -629,56 +634,70 @@ function Comparison({
   onClose: () => void;
   onPlayer: (id: PlayerId) => void;
 }) {
-  const [a, setA] = useState(initialPlayerIds[0] ?? players[0]?.id ?? ''),
-    [b, setB] = useState(initialPlayerIds[1] ?? players[1]?.id ?? players[0]?.id ?? '');
-  const playerA = players.find((player) => player.id === a),
-    playerB = players.find((player) => player.id === b);
-  const statsA = statisticsForPlayerHistory(matchesByPlayer.get(a) ?? [], a, mode, 'all', playerA?.statsResetAt),
-    statsB = statisticsForPlayerHistory(matchesByPlayer.get(b) ?? [], b, mode, 'all', playerB?.statsResetAt),
-    meetings = headToHead(matchesByPlayer.get(a) ?? matches, a, b, mode, playerA?.statsResetAt);
+  const [selectedIds, setSelectedIds] = useState<readonly PlayerId[]>(() => {
+    const contextual = [...new Set(initialPlayerIds)].filter((id) => players.some((player) => player.id === id));
+    return (contextual.length >= 2 ? contextual : players.slice(0, 2).map((player) => player.id)).slice(0, 8);
+  });
+  const selected = useMemo(
+    () =>
+      selectedIds.flatMap((id) => {
+        const player = players.find((item) => item.id === id);
+        return player
+          ? [
+              {
+                player,
+                stats: statisticsForPlayerHistory(matchesByPlayer.get(id) ?? [], id, mode, 'all', player.statsResetAt),
+              },
+            ]
+          : [];
+      }),
+    [matchesByPlayer, mode, players, selectedIds],
+  );
+  const toggle = (id: PlayerId) =>
+    setSelectedIds((current) => {
+      if (current.includes(id)) return current.length <= 2 ? current : current.filter((item) => item !== id);
+      return current.length >= 8 ? current : [...current, id];
+    });
+  const pair = selected.length === 2 ? selected : undefined;
+  const meetings = pair
+    ? headToHead(
+        matchesByPlayer.get(pair[0]!.player.id) ?? matches,
+        pair[0]!.player.id,
+        pair[1]!.player.id,
+        mode,
+        pair[0]!.player.statsResetAt,
+      )
+    : undefined;
   return (
     <section className="comparison">
       <button className="stats-back" onClick={onClose}>
         ← К игрокам
       </button>
       <h2>Сравнение игроков</h2>
-      <div className="comparison-player-links" aria-label="Полная статистика игроков">
-        {playerA ? (
-          <button onClick={() => onPlayer(playerA.id)}>
-            <PlayerIdentity playerId={playerA.id} name={playerA.name} compact />
-            <span>Открыть профиль</span>
-          </button>
-        ) : null}
-        {playerB ? (
-          <button onClick={() => onPlayer(playerB.id)}>
-            <PlayerIdentity playerId={playerB.id} name={playerB.name} compact />
-            <span>Открыть профиль</span>
-          </button>
-        ) : null}
-      </div>
-      <div className="comparison-selects">
+      <fieldset className="comparison-roster">
+        <legend>Участники сравнения · {selected.length} из 8</legend>
+        <div>
+          {players.map((player) => {
+            const checked = selectedIds.includes(player.id);
+            return (
+              <button
+                key={player.id}
+                type="button"
+                className={checked ? 'selected' : ''}
+                aria-pressed={checked}
+                disabled={!checked && selected.length >= 8}
+                onClick={() => toggle(player.id)}
+              >
+                <span aria-hidden="true">{checked ? '✓' : '+'}</span>
+                <PlayerIdentity playerId={player.id} name={player.name} compact />
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+      <div className="comparison-toolbar">
         <label>
-          Игрок A
-          <select value={a} onChange={(event) => setA(event.target.value)}>
-            {players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Игрок B
-          <select value={b} onChange={(event) => setB(event.target.value)}>
-            {players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Режим
+          Режим игры
           <select value={mode} onChange={(event) => onMode(event.target.value as StatisticsMode)}>
             {(Object.keys(modeLabels) as StatisticsMode[]).map((key) => (
               <option key={key} value={key}>
@@ -688,103 +707,120 @@ function Comparison({
           </select>
         </label>
       </div>
-      {a === b ? (
-        <p className="stats-note">Выберите двух разных игроков.</p>
+      {selected.length < 2 ? (
+        <p className="stats-note">Выберите минимум двух игроков.</p>
       ) : (
         <>
-          <div className="comparison-list">
-            {[
-              ['Завершённые игры', statsA.completedGames, statsB.completedGames],
-              ['Победы', statsA.wins, statsB.wins],
-              ['Процент побед', statsA.winRate, statsB.winRate, true],
-              ['Среднее за 3 дротика', statsA.threeDartAverage, statsB.threeDartAverage],
-              ['Среднее за дротик', statsA.averagePerDart, statsB.averagePerDart],
-              ['Лучший подход', statsA.bestVisit, statsB.bestVisit],
-              ['100+', statsA.thresholds['100+'], statsB.thresholds['100+']],
-              ['140+', statsA.thresholds['140+'], statsB.thresholds['140+']],
-              ['180', statsA.thresholds['180'], statsB.thresholds['180']],
-              [
-                'Доля утроений',
-                percentage(statsA.triples, statsA.knownHitDarts),
-                percentage(statsB.triples, statsB.knownHitDarts),
-                true,
-              ],
-              [
-                'Доля удвоений',
-                percentage(statsA.doubles, statsA.knownHitDarts),
-                percentage(statsB.doubles, statsB.knownHitDarts),
-                true,
-              ],
-              [
-                'Промахи',
-                percentage(statsA.misses, statsA.knownHitDarts),
-                percentage(statsB.misses, statsB.knownHitDarts),
-                true,
-                true,
-              ],
-            ].map(([label, valueA, valueB, percent, lowerIsBetter]) => (
-              <ComparisonRow
-                key={String(label)}
-                label={String(label)}
-                nameA={playerA?.name ?? 'A'}
-                nameB={playerB?.name ?? 'B'}
-                valueA={Number(valueA)}
-                valueB={Number(valueB)}
-                percent={Boolean(percent)}
-                lowerIsBetter={Boolean(lowerIsBetter)}
-              />
+          <div className="comparison-grid" aria-label={`Сравнение ${selected.length} игроков`}>
+            {selected.map(({ player, stats }) => (
+              <ComparisonPlayer key={player.id} player={player} stats={stats} all={selected} onOpen={onPlayer} />
             ))}
           </div>
-          <article className="head-to-head">
-            <h3>Личные встречи</h3>
-            <strong>
-              {playerA?.name} {meetings.playerAWins} : {meetings.playerBWins} {playerB?.name}
-            </strong>
-            <span>Совместных матчей: {meetings.sharedMatches}</span>
-            <span>Победы других игроков: {meetings.otherPlayerWins}</span>
-          </article>
+          {pair && meetings ? (
+            <article className="head-to-head">
+              <h3>Личные встречи</h3>
+              <strong>
+                {pair[0]!.player.name} {meetings.playerAWins} : {meetings.playerBWins} {pair[1]!.player.name}
+              </strong>
+              <span>Совместных матчей: {meetings.sharedMatches}</span>
+              <span>Победы других игроков: {meetings.otherPlayerWins}</span>
+            </article>
+          ) : null}
         </>
       )}
     </section>
   );
 }
 
-function ComparisonRow({
-  label,
-  nameA,
-  nameB,
-  valueA,
-  valueB,
-  percent,
-  lowerIsBetter,
+type ComparedPlayer = Readonly<{ player: Player; stats: PlayerHistoryStatistics }>;
+const primaryComparisonMetrics = [
+  { label: 'Матчи', value: (stats: PlayerHistoryStatistics) => stats.matches },
+  { label: 'Победы', value: (stats: PlayerHistoryStatistics) => stats.wins },
+  { label: 'Процент побед', value: (stats: PlayerHistoryStatistics) => stats.winRate, percent: true },
+  { label: 'Среднее за 3 дротика', value: (stats: PlayerHistoryStatistics) => stats.threeDartAverage },
+  { label: 'Лучший подход', value: (stats: PlayerHistoryStatistics) => stats.bestVisit },
+] as const;
+const secondaryComparisonMetrics = [
+  { label: 'Среднее за дротик', value: (stats: PlayerHistoryStatistics) => stats.averagePerDart },
+  { label: '100+', value: (stats: PlayerHistoryStatistics) => stats.thresholds['100+'] },
+  { label: '140+', value: (stats: PlayerHistoryStatistics) => stats.thresholds['140+'] },
+  { label: '180', value: (stats: PlayerHistoryStatistics) => stats.thresholds['180'] },
+  {
+    label: 'Доля утроений',
+    value: (stats: PlayerHistoryStatistics) => percentage(stats.triples, stats.knownHitDarts),
+    percent: true,
+  },
+  {
+    label: 'Доля удвоений',
+    value: (stats: PlayerHistoryStatistics) => percentage(stats.doubles, stats.knownHitDarts),
+    percent: true,
+  },
+  {
+    label: 'Промахи',
+    value: (stats: PlayerHistoryStatistics) => percentage(stats.misses, stats.knownHitDarts),
+    percent: true,
+    lowerIsBetter: true,
+  },
+] as const;
+
+function ComparisonPlayer({
+  player,
+  stats,
+  all,
+  onOpen,
 }: {
-  label: string;
-  nameA: string;
-  nameB: string;
-  valueA: number;
-  valueB: number;
-  percent: boolean;
-  lowerIsBetter: boolean;
+  player: Player;
+  stats: PlayerHistoryStatistics;
+  all: readonly ComparedPlayer[];
+  onOpen: (id: PlayerId) => void;
 }) {
-  const format = (value: number) => (percent ? pct(value) : Number.isInteger(value) ? String(value) : number(value));
-  const aBetter = lowerIsBetter ? valueA < valueB : valueA > valueB,
-    bBetter = lowerIsBetter ? valueB < valueA : valueB > valueA;
   return (
-    <article className="comparison-row">
-      <h3>{label}</h3>
-      <div>
-        <span>
-          <small>{nameA}</small>
-          <b>{format(valueA)}</b>
-          {aBetter ? <em>Лучше</em> : null}
-        </span>
-        <span>
-          <small>{nameB}</small>
-          <b>{format(valueB)}</b>
-          {bBetter ? <em>Лучше</em> : null}
-        </span>
+    <article className="comparison-player">
+      <button className="comparison-profile-link" onClick={() => onOpen(player.id)}>
+        <PlayerIdentity playerId={player.id} name={player.name} compact />
+        <span>Открыть профиль</span>
+      </button>
+      <div className="comparison-metrics">
+        {primaryComparisonMetrics.map((metric) => (
+          <ComparedMetric key={metric.label} metric={metric} stats={stats} all={all} />
+        ))}
       </div>
+      <details>
+        <summary>Другие показатели</summary>
+        <div className="comparison-metrics secondary-metrics">
+          {secondaryComparisonMetrics.map((metric) => (
+            <ComparedMetric key={metric.label} metric={metric} stats={stats} all={all} />
+          ))}
+        </div>
+      </details>
     </article>
+  );
+}
+
+type MetricDefinition = Readonly<{
+  label: string;
+  value: (stats: PlayerHistoryStatistics) => number;
+  percent?: boolean;
+  lowerIsBetter?: boolean;
+}>;
+function ComparedMetric({
+  metric,
+  stats,
+  all,
+}: {
+  metric: MetricDefinition;
+  stats: PlayerHistoryStatistics;
+  all: readonly ComparedPlayer[];
+}) {
+  const value = metric.value(stats);
+  const values = all.map((item) => metric.value(item.stats));
+  const leader = metric.lowerIsBetter ? value === Math.min(...values) : value === Math.max(...values);
+  return (
+    <span>
+      <small>{metric.label}</small>
+      <b>{metric.percent ? pct(value) : Number.isInteger(value) ? String(value) : number(value)}</b>
+      {leader && all.length > 1 ? <em>Лидер</em> : null}
+    </span>
   );
 }
 
