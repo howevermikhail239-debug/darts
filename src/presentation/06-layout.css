@@ -725,6 +725,45 @@ summary:focus-visible {
   color: #aab9ca;
   font-size: 12px;
 }
+.draft-message-slot {
+  display: grid;
+  min-height: 28px;
+  place-items: center;
+}
+.checkout-slot {
+  display: grid;
+  min-height: 50px;
+}
+.checkout-slot .checkout {
+  margin: 6px 0;
+}
+.confirmed-undo {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  min-height: 72px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+.confirmed-undo.available {
+  border-color: var(--line);
+  background: var(--surface);
+}
+.confirmed-undo .undo-link {
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+.confirmed-undo .undo-preview {
+  min-height: 17px;
+}
 
 /* Dialog and saved/resume states */
 .dialog-backdrop {

@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GamePage } from '../src/presentation/pages/GamePage';
 import { GameSession } from '../src/application/GameSession';
 import type { ActiveMatchRecord, MatchRepository } from '../src/application/ports/repositories';
 import { createMatch } from '../src/domain/match/createMatch';
+import { numberThrow } from '../src/domain/darts/DartThrow';
 
 const at = '2026-09-07T12:00:00.000Z';
 const players = [
@@ -35,6 +36,17 @@ class GatedRepository implements MatchRepository {
     await act(async () => {
       release?.();
     });
+  }
+}
+
+class ImmediateRepository implements MatchRepository {
+  async saveActive(): Promise<void> {}
+  async loadActive(): Promise<ActiveMatchRecord | undefined> {
+    return undefined;
+  }
+  async archiveAndClearActive(): Promise<void> {}
+  async listHistory(): Promise<readonly []> {
+    return [];
   }
 }
 
@@ -106,5 +118,57 @@ describe('dart pad during a pending write (CLI-3)', () => {
     expect(screen.getByRole('button', { name: 'Дротик 1: S19, заменить' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
     logged.mockRestore();
+  });
+});
+
+describe('confirmed visit undo', () => {
+  afterEach(cleanup);
+
+  it('names the player and score while keeping current-draft editing actions distinct', async () => {
+    const match = createMatch(
+      'undo-match',
+      ['a', 'b'],
+      { mode: 'fixed_visits', visitsPerPlayer: 3, startingPlayerIndex: 0 },
+      at,
+      { a: 'Миша', b: 'Саша' },
+    );
+    const session = new GameSession(
+      match,
+      new ImmediateRepository(),
+      () => crypto.randomUUID(),
+      () => at,
+    );
+    await session.record(numberThrow(20, 3));
+    await session.record(numberThrow(5, 1));
+    await session.record(numberThrow(1, 1));
+    await session.confirm();
+    const initial = session.snapshot();
+
+    render(
+      <GamePage
+        session={session}
+        initial={initial}
+        players={players}
+        previousMatches={[]}
+        onChange={() => undefined}
+        onBack={() => undefined}
+        onClosed={() => undefined}
+        onStatistics={async () => undefined}
+        onRematch={async () => undefined}
+        persistentPlayerIds={['a', 'b']}
+        hapticsEnabled={false}
+      />,
+    );
+
+    expect(screen.getByText('Последний подтверждённый ход')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Отменить подтверждённый ход Миша — 66' })).toHaveTextContent(
+      'Отменить ход Миша — 66',
+    );
+    expect(screen.getByText('Броски: T20 · S5 · S1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Удалить текущий дротик' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Сбросить текущий подход' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить подтверждённый ход Миша — 66' }));
+    await waitFor(() => expect(screen.getByText('Пока нет хода для отмены')).toBeInTheDocument());
   });
 });

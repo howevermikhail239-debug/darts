@@ -300,12 +300,14 @@ export function GamePage({
         }}
         onConfirm={() => confirm().catch(() => undefined)}
       />
-      {view.checkoutHint ? (
-        <div className="checkout" role="status">
-          <span>Возможное закрытие</span>
-          <strong>{view.checkoutHint}</strong>
-        </div>
-      ) : null}
+      <div className="checkout-slot">
+        {view.checkoutHint ? (
+          <div className="checkout" role="status">
+            <span>Возможное закрытие</span>
+            <strong>{view.checkoutHint}</strong>
+          </div>
+        ) : null}
+      </div>
       {view.awaitingTieDecision ? (
         <div className="tie-panel">
           <h2>{t.draw}</h2>
@@ -352,19 +354,26 @@ export function GamePage({
           {error}
         </div>
       ) : null}
-      <button
-        className="undo-link"
-        aria-label={t.undo}
-        onClick={() => undo().catch(() => undefined)}
-        disabled={!undoVisit}
-      >
-        {undoVisit
-          ? `Отменить: ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} · ${undoVisit.awardedScore}`
-          : t.undo}
-      </button>
-      {undoVisit && undoVisit.inputKind !== 'aggregate' ? (
-        <small className="undo-preview">{undoVisit.darts.map(notationOf).join(' · ')}</small>
-      ) : null}
+      <div className={`confirmed-undo ${undoVisit ? 'available' : ''}`}>
+        <span>Последний подтверждённый ход</span>
+        <button
+          className="undo-link"
+          aria-label={
+            undoVisit
+              ? `Отменить подтверждённый ход ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} — ${undoVisit.awardedScore}`
+              : t.undo
+          }
+          onClick={() => undo().catch(() => undefined)}
+          disabled={!undoVisit}
+        >
+          {undoVisit
+            ? `Отменить ход ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} — ${undoVisit.awardedScore}`
+            : 'Пока нет хода для отмены'}
+        </button>
+        {undoVisit && undoVisit.inputKind !== 'aggregate' ? (
+          <small className="undo-preview">Броски: {undoVisit.darts.map(notationOf).join(' · ')}</small>
+        ) : null}
+      </div>
       <Dialog
         open={Boolean(dialog)}
         title={dialog?.title ?? ''}

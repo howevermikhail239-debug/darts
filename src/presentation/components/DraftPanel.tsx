@@ -82,27 +82,32 @@ export function DraftPanel({
           </div>
         ) : null}
       </div>
-      {evaluation.reason ? <p className="reason">{evaluation.reason}. Зачётные очки: 0.</p> : null}
+      <div className="draft-message-slot" aria-live="polite">
+        {evaluation.reason ? (
+          <p className="reason">{evaluation.reason}. Зачётные очки: 0.</p>
+        ) : !ready ? (
+          <p className="hint">{hint}</p>
+        ) : null}
+      </div>
       <div className="draft-actions">
         <button
           className="secondary"
           onClick={onRemove}
           disabled={(isDetailedDraft(draft) ? draft.darts.length === 0 : draft.score === undefined) || busy}
         >
-          {isDetailedDraft(draft) ? 'Удалить последний' : 'Очистить сумму'}
+          {isDetailedDraft(draft) ? 'Удалить текущий дротик' : 'Очистить текущую сумму'}
         </button>
         <button
           className="secondary"
           onClick={onReset}
           disabled={(isDetailedDraft(draft) ? draft.darts.length === 0 : draft.score === undefined) || busy}
         >
-          {t.reset}
+          Сбросить текущий подход
         </button>
         <button className="primary" onClick={onConfirm} disabled={!canConfirm}>
           {confirmLabel}
         </button>
       </div>
-      {!ready ? <p className="hint">{hint}</p> : null}
     </section>
   );
 }
