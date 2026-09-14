@@ -369,6 +369,9 @@
   padding: 8px;
   background: var(--surface);
 }
+.comparison-metrics > span:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 .comparison-metrics small {
   color: var(--muted);
   font-size: 10px;
