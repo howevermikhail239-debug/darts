@@ -17,7 +17,7 @@ async function startMatch(page: import('@playwright/test').Page) {
 
 async function startLimited501(page: import('@playwright/test').Page, players = 2, limit = 5) {
   await page.goto('/');
-  const add = page.getByRole('button', { name: '+ Добавить игрока' });
+  const add = page.getByRole('button', { name: '+ Добавить участника' });
   for (let count = 2; count < players; count += 1) await add.click();
   await page.getByRole('button', { name: 'Ограничить количество подходов' }).click();
   await page.getByRole('button', { name: String(limit), exact: true }).click();
@@ -95,7 +95,7 @@ async function installSavedProfiles(page: import('@playwright/test').Page) {
 async function createLocalProfile(page: import('@playwright/test').Page, name: string) {
   const temporary = page.locator('.participant-card.temporary').first();
   const card = (await temporary.count()) ? temporary : page.locator('.participant-card').first();
-  await card.getByRole('button', { name: /Создать профиль|Создать другой профиль|Сохранить как профиль/ }).click();
+  await card.getByRole('button', { name: 'Создать новый профиль' }).click();
   await card.getByLabel('Имя профиля').fill(name);
   await card.getByRole('button', { name: 'Создать и выбрать' }).click();
   await expect(page.getByLabel('Выбрать сохранённого игрока 1').locator('option', { hasText: name })).toHaveCount(1);
@@ -104,7 +104,7 @@ async function createLocalProfile(page: import('@playwright/test').Page, name: s
 async function startOneVisitSeriesWithProfiles(page: import('@playwright/test').Page, names: readonly string[]) {
   await page.goto('/');
   for (let count = 2; count < names.length; count += 1)
-    await page.getByRole('button', { name: '+ Добавить игрока' }).click();
+    await page.getByRole('button', { name: '+ Добавить участника' }).click();
   for (let index = 0; index < names.length; index += 1) {
     await page.getByLabel(`Выбрать сохранённого игрока ${index + 1}`).selectOption({ label: names[index]! });
   }
@@ -124,7 +124,7 @@ async function missVisit(page: import('@playwright/test').Page) {
 
 async function startOneVisitSeries(page: import('@playwright/test').Page, players = 2, useSavedProfiles = false) {
   await page.goto('/');
-  const add = page.getByRole('button', { name: '+ Добавить игрока' });
+  const add = page.getByRole('button', { name: '+ Добавить участника' });
   for (let count = 2; count < players; count += 1) await add.click();
   if (useSavedProfiles) {
     await page.getByLabel('Выбрать сохранённого игрока 1').selectOption('saved-player-1');
@@ -260,7 +260,7 @@ test('501: draft can be replaced and only Confirm changes the match', async ({ p
 
 test('setup supports 3, 5, and 8 players without exceeding the UI limit', async ({ page }) => {
   await page.goto('/');
-  const add = page.getByRole('button', { name: '+ Добавить игрока' });
+  const add = page.getByRole('button', { name: '+ Добавить участника' });
   for (let count = 2; count < 8; count += 1) await add.click();
   await expect(add).toBeHidden();
   await expect(page.getByRole('textbox')).toHaveCount(8);
@@ -339,9 +339,38 @@ test('reload restores confirmed play and Undo uses the persisted checkpoint', as
   await page.reload();
   await page.getByRole('button', { name: 'Продолжить' }).click();
   await expect(page.getByText('Текущий подход: Игрок 2')).toBeVisible();
-  await page.getByRole('button', { name: 'Отменить предыдущий подход' }).click();
+  await page.getByRole('button', { name: 'Отменить подтверждённый ход Игрок 1 — 20' }).click();
   await expect(page.getByText('Текущий подход: Игрок 1')).toBeVisible();
   await expect(page.locator('.main-score').first()).toHaveText('501');
+});
+
+test('dart entry keeps its controls spatially stable throughout one mobile visit', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Начать' }).click();
+  await scoreToForty(page);
+  const pad = page.getByLabel('Панель ввода попадания');
+  const positions: number[] = [];
+  positions.push((await pad.boundingBox())!.y);
+  await page.getByRole('button', { name: 'Сектор 20, множитель 1' }).click();
+  positions.push((await pad.boundingBox())!.y);
+  await page.getByRole('button', { name: 'Сектор 20, множитель 1' }).click();
+  positions.push((await pad.boundingBox())!.y);
+  expect(Math.max(...positions) - Math.min(...positions)).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('button', { name: 'Удалить текущий дротик' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Сбросить текущий подход' })).toBeEnabled();
+});
+
+test('profile creation suggests a normalized existing identity before creating a duplicate', async ({ page }) => {
+  await installSavedProfiles(page);
+  await page.goto('/');
+  const first = page.locator('.participant-card').first();
+  await first.getByRole('button', { name: 'Создать новый профиль' }).click();
+  await first.getByLabel('Имя профиля').fill('  ИГРОК\u30001\u00a0');
+  await first.getByRole('button', { name: 'Создать и выбрать' }).click();
+  await expect(first.getByText(/такой профиль уже существует/i)).toBeVisible();
+  await first.getByRole('button', { name: 'Выбрать Игрок 1' }).click();
+  await expect(first.getByText('Профиль игрока · статистика сохраняется')).toBeVisible();
 });
 
 test('fixed visits tie can start an extra round and safely tie again', async ({ page }) => {
@@ -1046,7 +1075,7 @@ test('stage 4 destructive dialog traps focus, closes on Escape and restores focu
 test('stage 4 eight-player round keeps active player readable in an internal rail', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  for (let count = 2; count < 8; count += 1) await page.getByRole('button', { name: '+ Добавить игрока' }).click();
+  for (let count = 2; count < 8; count += 1) await page.getByRole('button', { name: '+ Добавить участника' }).click();
   for (let index = 1; index <= 8; index += 1)
     await page
       .getByLabel(`Имя игрока ${index}`)
@@ -1188,7 +1217,7 @@ test('Stage 4.5 temporary rematch recreates only temporary identity and never cr
 
 test('Stage 4.5 company rematch preserves three shared ids and History can start another rematch', async ({ page }) => {
   await createCompanyWithPlayers(page, 'Серия клуба', ['Миша', 'Саша', 'Женя']);
-  await page.getByRole('button', { name: '+ Добавить игрока' }).click();
+  await page.getByRole('button', { name: '+ Добавить участника' }).click();
   for (let index = 1; index <= 3; index += 1)
     await page
       .getByLabel(`Выбрать сохранённого игрока ${index}`)
