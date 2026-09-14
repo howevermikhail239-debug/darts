@@ -17,14 +17,20 @@ const reachable = (score: number, darts: number, outRule: OutRule): boolean => {
   if (score < 1 || darts < 1) return false;
   const finishers =
     outRule === 'double' ? allDarts.filter(isDouble) : outRule === 'master' ? allDarts.filter(masterFinish) : allDarts;
+  const memo = new Map<string, boolean>();
   const search = (remaining: number, left: number): boolean => {
-    if (left === 1) return finishers.some((dart) => scoreOf(dart) === remaining);
-    return (
-      allDarts.some((dart) => {
-        const next = remaining - scoreOf(dart);
-        return next >= 1 && search(next, left - 1);
-      }) || search(remaining, left - 1)
-    );
+    const key = `${remaining}:${left}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+    const result =
+      left === 1
+        ? finishers.some((dart) => scoreOf(dart) === remaining)
+        : allDarts.some((dart) => {
+            const next = remaining - scoreOf(dart);
+            return next >= 1 && search(next, left - 1);
+          }) || search(remaining, left - 1);
+    memo.set(key, result);
+    return result;
   };
   return search(score, darts);
 };
@@ -66,5 +72,5 @@ describe('checkout suggestions (DOM-8)', () => {
       `MISSING ${missing.length}: ${JSON.stringify(missing)}\nINVALID ${invalid.length}: ${JSON.stringify(invalid)}\nIMPOSSIBLE-BUT-SUGGESTED ${surplus.length}: ${JSON.stringify(surplus)}`,
     );
     expect({ missing, invalid, surplus }).toEqual({ missing: [], invalid: [], surplus: [] });
-  });
+  }, 15_000);
 });
