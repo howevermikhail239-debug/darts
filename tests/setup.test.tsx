@@ -51,7 +51,7 @@ describe('SetupPage participants', () => {
         onAddLocalPlayer={onAddLocalPlayer}
       />,
     );
-    fireEvent.click(screen.getAllByRole('button', { name: 'Создать профиль' })[0]!);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Создать новый профиль' })[0]!);
     fireEvent.change(screen.getByLabelText('Имя профиля'), { target: { value: ' Миша ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Создать и выбрать' }));
     await waitFor(() => expect(onAddLocalPlayer).toHaveBeenCalledWith('Миша'));
@@ -70,7 +70,49 @@ describe('SetupPage participants', () => {
       />,
     );
     fireEvent.change(screen.getByLabelText('Имя игрока 1'), { target: { value: 'Гость' } });
-    expect(screen.getByRole('button', { name: 'Сохранить как профиль' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Создать новый профиль' })[0]).toBeInTheDocument();
+  });
+
+  it('offers existing profiles immediately and prevents an accidental normalized duplicate', async () => {
+    const existing = { id: 'misha', name: 'Миша', createdAt: '2026-01-01' };
+    const onAddLocalPlayer = vi.fn().mockResolvedValue({ id: 'duplicate', name: ' МИША ', createdAt: '2026-01-02' });
+    render(
+      <SetupPage
+        saved={[existing]}
+        onStart={vi.fn()}
+        onHistory={() => undefined}
+        onStatistics={() => undefined}
+        onAddLocalPlayer={onAddLocalPlayer}
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: /Миша/ })[0]).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Создать новый профиль' })[0]!);
+    fireEvent.change(screen.getByLabelText('Имя профиля'), { target: { value: '  МИША\u00a0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать и выбрать' }));
+
+    expect(await screen.findByText(/такой профиль уже существует/i)).toBeInTheDocument();
+    expect(onAddLocalPlayer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать Миша' }));
+    expect(screen.getByText('Профиль игрока · статистика сохраняется')).toBeInTheDocument();
+  });
+
+  it('creates a genuinely distinct person with the same normalized name only after explicit confirmation', async () => {
+    const onAddLocalPlayer = vi.fn().mockResolvedValue({ id: 'other-misha', name: 'Миша', createdAt: '2026-01-02' });
+    render(
+      <SetupPage
+        saved={[{ id: 'misha', name: 'Миша', createdAt: '2026-01-01' }]}
+        onStart={vi.fn()}
+        onHistory={() => undefined}
+        onStatistics={() => undefined}
+        onAddLocalPlayer={onAddLocalPlayer}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Создать новый профиль' })[0]!);
+    fireEvent.change(screen.getByLabelText('Имя профиля'), { target: { value: 'Миша' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать и выбрать' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Создать другого человека с таким именем' }));
+    await waitFor(() => expect(onAddLocalPlayer).toHaveBeenCalledWith('Миша'));
   });
 
   it('protects company creation from duplicate submits and keeps the name for a retry', async () => {

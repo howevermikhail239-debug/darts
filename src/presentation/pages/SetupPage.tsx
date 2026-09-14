@@ -12,6 +12,7 @@ import { PlayerIdentity } from '../components/PlayerIdentity';
 import { Dialog } from '../components/Dialog';
 import { userMessage } from '../errors/userMessage';
 import { t } from '../strings';
+import { playersMatchingName } from '../../domain/players/playerName';
 
 export type SetupParticipant = MatchParticipantInput;
 type ParticipantDraft = RestoredSetupParticipant;
@@ -130,6 +131,7 @@ export function SetupPage({
       </header>
       <CompanyContextPanel
         company={company}
+        saved={saved}
         syncNote={syncNote}
         onCreateCompany={onCreateCompany}
         onAddSharedPlayer={onAddSharedPlayer}
@@ -252,6 +254,7 @@ function TodayPanel({ summary }: { summary: TodaySummary }) {
 
 function CompanyContextPanel({
   company,
+  saved,
   syncNote,
   onCreateCompany,
   onAddSharedPlayer,
@@ -261,7 +264,7 @@ function CompanyContextPanel({
 }: Pick<
   Props,
   'company' | 'syncNote' | 'onCreateCompany' | 'onAddSharedPlayer' | 'onLeaveCompany' | 'inviteLink' | 'onRetry'
->) {
+> & { saved: readonly Player[] }) {
   const [companyName, setCompanyName] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [creatingCompany, setCreatingCompany] = useState(false);
@@ -269,13 +272,19 @@ function CompanyContextPanel({
   const [createError, setCreateError] = useState<string>();
   const [playerBusy, setPlayerBusy] = useState(false);
   const [playerError, setPlayerError] = useState<string>();
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
   const [copyNote, setCopyNote] = useState<string>();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   // CLI-2: сетевая ошибка при добавлении игрока компании больше не теряется.
-  const addSharedPlayer = () => {
+  const addSharedPlayer = (allowDuplicate = false) => {
     if (!onAddSharedPlayer || playerBusy) return;
+    if (!allowDuplicate && playersMatchingName(saved, playerName).length) {
+      setConfirmDuplicate(true);
+      return;
+    }
     setPlayerBusy(true);
+    setConfirmDuplicate(false);
     setPlayerError(undefined);
     void onAddSharedPlayer(playerName)
       .then(() => setPlayerName(''))
@@ -351,12 +360,23 @@ function CompanyContextPanel({
             value={playerName}
             maxLength={80}
             disabled={playerBusy}
-            onChange={(event) => setPlayerName(event.target.value)}
+            onChange={(event) => {
+              setPlayerName(event.target.value);
+              setConfirmDuplicate(false);
+            }}
           />
         </label>
-        <button className="secondary" disabled={playerBusy || !playerName.trim()} onClick={addSharedPlayer}>
+        <button className="secondary" disabled={playerBusy || !playerName.trim()} onClick={() => addSharedPlayer()}>
           {playerBusy ? 'Добавляем…' : 'Добавить игрока'}
         </button>
+        {confirmDuplicate ? (
+          <div className="duplicate-profile-warning" role="status">
+            <p>Профиль с таким именем уже есть. Выберите его ниже в участниках матча, если это тот же человек.</p>
+            <button className="quiet-button" onClick={() => addSharedPlayer(true)}>
+              Создать другого человека с таким именем
+            </button>
+          </div>
+        ) : null}
         {playerError ? (
           <p className="reason" role="alert">
             {playerError}
@@ -441,6 +461,9 @@ function ParticipantList({
   onRemove: (index: number) => void;
   onAdd: () => void;
 }) {
+  const selectedIds = new Set(
+    participants.flatMap((participant) => (participant.playerId ? [participant.playerId] : [])),
+  );
   return (
     <>
       <div className="player-fields">
@@ -452,6 +475,7 @@ function ParticipantList({
             saved={saved}
             profileLabel={profileLabel}
             onCreateProfile={onCreateProfile}
+            unavailablePlayerIds={new Set([...selectedIds].filter((id) => id !== participant.playerId))}
             removable={participants.length > 2}
             onChange={(next) => onChange(participants.map((item, itemIndex) => (itemIndex === index ? next : item)))}
             onRemove={() => onRemove(index)}
@@ -460,7 +484,7 @@ function ParticipantList({
       </div>
       {participants.length < 8 ? (
         <button type="button" className="secondary add-player" onClick={onAdd}>
-          + Добавить игрока
+          + Добавить участника
         </button>
       ) : null}
     </>
@@ -473,6 +497,7 @@ function ParticipantRow({
   saved,
   profileLabel,
   onCreateProfile,
+  unavailablePlayerIds,
   removable,
   onChange,
   onRemove,
@@ -482,6 +507,7 @@ function ParticipantRow({
   saved: readonly Player[];
   profileLabel: string;
   onCreateProfile?: ((name: string) => Promise<Player>) | undefined;
+  unavailablePlayerIds: ReadonlySet<string>;
   removable: boolean;
   onChange: (participant: ParticipantDraft) => void;
   onRemove: () => void;
@@ -490,6 +516,7 @@ function ParticipantRow({
   const [profileName, setProfileName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
   const selected = participant.playerId
     ? (saved.find((player) => player.id === participant.playerId) ?? {
         id: participant.playerId,
@@ -501,23 +528,32 @@ function ParticipantRow({
     const defaultName = `Игрок ${index + 1}`;
     setProfileName(participant.name === defaultName ? '' : participant.name);
     setError(undefined);
+    setDuplicateWarning(false);
     setCreating(true);
   };
-  const createAndSelect = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const createAndSelect = async (event?: FormEvent<HTMLFormElement>, allowDuplicate = false) => {
+    event?.preventDefault();
     if (!onCreateProfile || busy || !profileName.trim()) return;
+    const matches = playersMatchingName(saved, profileName).filter((player) => !unavailablePlayerIds.has(player.id));
+    if (!allowDuplicate && matches.length) {
+      setDuplicateWarning(true);
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
       const player = await onCreateProfile(profileName.trim());
       onChange({ name: player.name, playerId: player.id });
       setCreating(false);
+      setDuplicateWarning(false);
     } catch {
       setError('Не удалось создать профиль. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
   };
+  const availableProfiles = saved.filter((player) => !unavailablePlayerIds.has(player.id));
+  const matchingProfiles = playersMatchingName(availableProfiles, profileName);
   return (
     <article
       className={`participant-card ${selected ? 'profile' : participant.missingPlayerId ? 'missing' : 'temporary'}`}
@@ -557,9 +593,26 @@ function ParticipantRow({
           <p className="participant-semantic">Временный игрок · статистика только этого матча</p>
         </>
       )}
+      {!selected && availableProfiles.length ? (
+        <div className="profile-quick-picks" aria-label={`Выбрать существующий профиль для игрока ${index + 1}`}>
+          <b>Выбрать существующий профиль</b>
+          <div>
+            {availableProfiles.slice(0, 6).map((player) => (
+              <button
+                key={player.id}
+                type="button"
+                className="profile-quick-pick"
+                onClick={() => onChange({ name: player.name, playerId: player.id })}
+              >
+                <PlayerIdentity playerId={player.id} name={player.name} compact />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {saved.length || participant.missingPlayerId ? (
         <label className="profile-picker">
-          {selected || participant.missingPlayerId ? 'Сменить игрока' : 'Выбрать профиль'}
+          {selected || participant.missingPlayerId ? 'Сменить профиль' : 'Все профили'}
           <select
             aria-label={`Выбрать сохранённого игрока ${index + 1}`}
             value={participant.playerId ?? ''}
@@ -574,7 +627,7 @@ function ParticipantRow({
           >
             <option value="">Временный игрок</option>
             {saved.map((player) => (
-              <option key={player.id} value={player.id}>
+              <option key={player.id} value={player.id} disabled={unavailablePlayerIds.has(player.id)}>
                 {player.name}
               </option>
             ))}
@@ -583,11 +636,7 @@ function ParticipantRow({
       ) : null}
       {onCreateProfile && !creating ? (
         <button type="button" className="profile-slot-action" onClick={openCreator}>
-          {selected
-            ? 'Создать другой профиль'
-            : participant.name === `Игрок ${index + 1}`
-              ? 'Создать профиль'
-              : 'Сохранить как профиль'}
+          Создать новый профиль
         </button>
       ) : null}
       {creating ? (
@@ -603,17 +652,44 @@ function ParticipantRow({
               value={profileName}
               maxLength={80}
               disabled={busy}
-              onChange={(event) => setProfileName(event.target.value)}
+              onChange={(event) => {
+                setProfileName(event.target.value);
+                setDuplicateWarning(false);
+              }}
             />
           </label>
           <p>Профиль сохранит статистику между матчами.</p>
+          {duplicateWarning && matchingProfiles.length ? (
+            <div className="duplicate-profile-warning" role="status">
+              <p>Похоже, такой профиль уже существует. Выберите его, если это тот же человек.</p>
+              <div>
+                {matchingProfiles.map((player) => (
+                  <button
+                    key={player.id}
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      onChange({ name: player.name, playerId: player.id });
+                      setCreating(false);
+                      setDuplicateWarning(false);
+                    }}
+                  >
+                    Выбрать {player.name}
+                  </button>
+                ))}
+                <button type="button" className="quiet-button" onClick={() => createAndSelect(undefined, true)}>
+                  Создать другого человека с таким именем
+                </button>
+              </div>
+            </div>
+          ) : null}
           {error ? (
             <p className="reason" role="alert">
               {error}
             </p>
           ) : null}
           <div>
-            <button type="submit" className="secondary" disabled={busy || !profileName.trim()}>
+            <button type="submit" className="secondary" disabled={busy || !profileName.trim() || duplicateWarning}>
               {busy ? 'Создаём…' : 'Создать и выбрать'}
             </button>
             <button type="button" className="quiet-button" disabled={busy} onClick={() => setCreating(false)}>
