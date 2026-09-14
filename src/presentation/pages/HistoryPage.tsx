@@ -222,6 +222,7 @@ function HistoryDetail({
 }) {
   // PERF-5: статистика матча считается один раз на раскрытую карточку, а не на каждый рендер.
   const stats = useMemo(() => statisticsForMatch(match), [match]);
+  const [heatmapPlayerId, setHeatmapPlayerId] = useState(match.players[0]!);
   return (
     <div className="history-detail">
       <h3>Подробности матча</h3>
@@ -256,14 +257,25 @@ function HistoryDetail({
           </li>
         ))}
       </ol>
-      {match.players.map((id) => (
+      <section className="history-heatmap" aria-label="Тепловая карта матча">
+        <nav aria-label="Выбрать игрока для тепловой карты">
+          {match.players.map((id, index) => (
+            <button
+              key={id}
+              className={heatmapPlayerId === id ? 'selected' : ''}
+              aria-pressed={heatmapPlayerId === id}
+              onClick={() => setHeatmapPlayerId(id)}
+            >
+              <PlayerIdentity playerId={id} name={nameOf(match, id)} position={index} compact />
+            </button>
+          ))}
+        </nav>
         <DartboardHeatmap
-          key={id}
-          label={`Попадания ${nameOf(match, id)} в этом матче`}
-          hitCounts={stats[id]?.hitCounts ?? {}}
-          detailedDarts={stats[id]?.knownHitDarts ?? 0}
+          label={`Тепловая карта — ${nameOf(match, heatmapPlayerId)}`}
+          hitCounts={stats[heatmapPlayerId]?.hitCounts ?? {}}
+          detailedDarts={stats[heatmapPlayerId]?.knownHitDarts ?? 0}
         />
-      ))}
+      </section>
       {match.status === 'completed' ? (
         <div className="history-actions">
           <button

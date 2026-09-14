@@ -519,6 +519,44 @@
   gap: 24px;
   align-items: center;
 }
+.dartboard-heatmap > h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 16px;
+}
+.history-heatmap {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.history-heatmap > nav {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 5px;
+  scrollbar-width: thin;
+}
+.history-heatmap > nav button {
+  flex: 0 0 auto;
+  max-width: 190px;
+  min-height: 42px;
+  padding: 6px 10px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+}
+.history-heatmap > nav button.selected {
+  color: #1b1008;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.history-heatmap > nav .player-identity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dartboard-heatmap svg {
   width: 100%;
   max-width: 420px;

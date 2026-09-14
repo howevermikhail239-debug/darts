@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from '../src/presentation/pages/SettingsPage';
 import { HistoryPage } from '../src/presentation/pages/HistoryPage';
@@ -78,6 +78,16 @@ describe('history list (PERF-7, UI-3)', () => {
 
     expect(screen.getByText('Миша (сейчас Михаил) — Саша')).toBeInTheDocument();
     expect(screen.getByText('Победитель: Миша (сейчас Михаил)')).toBeInTheDocument();
+  });
+
+  it('shows the heatmap owner visibly and switches owners without rendering every board', async () => {
+    render(<HistoryPage matches={[completed(0)]} players={[]} {...historyProps} />);
+    fireEvent.click(screen.getByText('Миша — Саша'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Тепловая карта — Миша' })).toBeInTheDocument());
+    const picker = screen.getByRole('navigation', { name: 'Выбрать игрока для тепловой карты' });
+    fireEvent.click(within(picker).getByRole('button', { name: /Саша/ }));
+    expect(screen.getByRole('heading', { name: 'Тепловая карта — Саша' })).toBeInTheDocument();
+    expect(screen.getAllByText(/Для тепловой карты пока нет/)).toHaveLength(1);
   });
 });
 

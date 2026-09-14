@@ -5,8 +5,13 @@ import { DartboardHeatmap } from '../src/presentation/components/DartboardHeatma
 describe('DartboardHeatmap', () => {
   it('renders standard board geometry and maps known hit frequencies', () => {
     const { container } = render(
-      <DartboardHeatmap hitCounts={{ T20: 4, S20: 2, D20: 1, S1: 1, '25': 2, Bull: 1, MISS: 3 }} detailedDarts={14} />,
+      <DartboardHeatmap
+        label="Тепловая карта — Михаил"
+        hitCounts={{ T20: 4, S20: 2, D20: 1, S1: 1, '25': 2, Bull: 1, MISS: 3 }}
+        detailedDarts={14}
+      />,
     );
+    expect(screen.getByRole('heading', { name: 'Тепловая карта — Михаил' })).toBeInTheDocument();
     expect([...container.querySelectorAll('svg text')].map((node) => node.textContent)).toEqual([
       '20',
       '1',

@@ -47,12 +47,13 @@ export function DartboardHeatmap({
   if (detailedDarts === 0)
     return (
       <section className="heatmap-empty">
-        <h3>Мишень</h3>
+        <h3>{label}</h3>
         <p>Для тепловой карты пока нет детализированных бросков.</p>
       </section>
     );
   return (
     <section className="dartboard-heatmap">
+      <h3>{label}</h3>
       <svg viewBox="0 0 200 200" role="img" aria-label={label}>
         <circle cx="100" cy="100" r="74" className="board-edge" />
         {regions.map((region) => (
