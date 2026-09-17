@@ -598,6 +598,21 @@ summary:focus-visible {
 .scoreboard.multi .mini-stats {
   display: grid;
 }
+.scoreboard.multi.dense .player-score,
+.scoreboard.multi.dense .player-score.active {
+  min-width: 142px;
+  padding-block: 5px;
+}
+.scoreboard.multi.dense .turn-mark,
+.scoreboard.multi.dense .turn-spacer {
+  height: 14px;
+}
+.scoreboard.multi.dense .main-score {
+  font-size: 32px;
+}
+.scoreboard.multi.dense .mini-stats {
+  display: none;
+}
 .current-label {
   margin: 5px 0;
   color: var(--accent);
@@ -732,16 +747,15 @@ summary:focus-visible {
 }
 .checkout-slot {
   display: grid;
-  min-height: 50px;
+  min-height: 30px;
 }
 .checkout-slot .checkout {
-  margin: 6px 0;
+  margin: 3px 0;
 }
 .confirmed-undo {
   display: grid;
   gap: 2px;
   justify-items: center;
-  min-height: 72px;
   margin-top: 6px;
   padding: 8px 10px;
   color: var(--muted);
@@ -1247,6 +1261,12 @@ summary:focus-visible {
   .special button {
     min-height: 44px;
   }
+  .game-page .hint {
+    display: none;
+  }
+  .draft-message-slot {
+    min-height: 0;
+  }
   .stats-player-grid {
     grid-template-columns: 1fr;
   }
@@ -1387,6 +1407,9 @@ summary:focus-visible {
   }
   .game-page .hint {
     display: none;
+  }
+  .draft-message-slot {
+    min-height: 0;
   }
 }
 

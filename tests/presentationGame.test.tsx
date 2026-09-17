@@ -169,6 +169,7 @@ describe('confirmed visit undo', () => {
     expect(screen.getByRole('button', { name: 'Сбросить текущий подход' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Отменить подтверждённый ход Миша — 66' }));
-    await waitFor(() => expect(screen.getByText('Пока нет хода для отмены')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Последний подтверждённый ход')).not.toBeInTheDocument());
+    expect(screen.queryByText('Пока нет хода для отмены')).not.toBeInTheDocument();
   });
 });

@@ -14,7 +14,10 @@ export function Scoreboard({ rows }: Props) {
       });
   }, [activeId, rows.length]);
   return (
-    <section className={`scoreboard ${rows.length > 2 ? 'multi' : ''}`} aria-label="Счёт игроков">
+    <section
+      className={`scoreboard ${rows.length > 2 ? 'multi' : ''} ${rows.length >= 5 ? 'dense' : ''}`}
+      aria-label="Счёт игроков"
+    >
       {rows.map((row) => {
         return (
           <article

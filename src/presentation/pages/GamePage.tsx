@@ -354,26 +354,21 @@ export function GamePage({
           {error}
         </div>
       ) : null}
-      <div className={`confirmed-undo ${undoVisit ? 'available' : ''}`}>
-        <span>Последний подтверждённый ход</span>
-        <button
-          className="undo-link"
-          aria-label={
-            undoVisit
-              ? `Отменить подтверждённый ход ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} — ${undoVisit.awardedScore}`
-              : t.undo
-          }
-          onClick={() => undo().catch(() => undefined)}
-          disabled={!undoVisit}
-        >
-          {undoVisit
-            ? `Отменить ход ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} — ${undoVisit.awardedScore}`
-            : 'Пока нет хода для отмены'}
-        </button>
-        {undoVisit && undoVisit.inputKind !== 'aggregate' ? (
-          <small className="undo-preview">Броски: {undoVisit.darts.map(notationOf).join(' · ')}</small>
-        ) : null}
-      </div>
+      {undoVisit ? (
+        <div className="confirmed-undo available">
+          <span>Последний подтверждённый ход</span>
+          <button
+            className="undo-link"
+            aria-label={`Отменить подтверждённый ход ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} — ${undoVisit.awardedScore}`}
+            onClick={() => undo().catch(() => undefined)}
+          >
+            {`Отменить ход ${snapshot.match.participantNames[undoVisit.playerId] ?? 'Игрок'} — ${undoVisit.awardedScore}`}
+          </button>
+          {undoVisit.inputKind !== 'aggregate' ? (
+            <small className="undo-preview">Броски: {undoVisit.darts.map(notationOf).join(' · ')}</small>
+          ) : null}
+        </div>
+      ) : null}
       <Dialog
         open={Boolean(dialog)}
         title={dialog?.title ?? ''}

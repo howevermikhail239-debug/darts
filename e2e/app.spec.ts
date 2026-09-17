@@ -361,6 +361,25 @@ test('dart entry keeps its controls spatially stable throughout one mobile visit
   await expect(page.getByRole('button', { name: 'Сбросить текущий подход' })).toBeEnabled();
 });
 
+test('mobile game keeps optional checkout and undo space out of an empty visit', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await startMatch(page);
+  const pad = page.getByLabel('Панель ввода попадания');
+  const emptyPadY = (await pad.boundingBox())!.y;
+
+  await expect(page.locator('.confirmed-undo')).toHaveCount(0);
+  await expect(page.locator('.checkout-slot')).toHaveCSS('min-height', '30px');
+
+  await page.getByRole('button', { name: 'Сектор 20, множитель 1' }).click();
+  await page.getByRole('button', { name: 'Мимо' }).click();
+  await page.getByRole('button', { name: 'Мимо' }).click();
+  expect((await pad.boundingBox())!.y).toBeCloseTo(emptyPadY, 0);
+
+  await page.getByRole('button', { name: 'Подтвердить 20' }).click();
+  await expect(page.getByRole('button', { name: 'Отменить подтверждённый ход Игрок 1 — 20' })).toBeVisible();
+  expect((await pad.boundingBox())!.y).toBeCloseTo(emptyPadY, 0);
+});
+
 test('profile creation suggests a normalized existing identity before creating a duplicate', async ({ page }) => {
   await installSavedProfiles(page);
   await page.goto('/');
