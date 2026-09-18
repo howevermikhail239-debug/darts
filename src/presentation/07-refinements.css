@@ -661,6 +661,11 @@
 .win-probability span:nth-child(2n) {
   background: #8a5b42;
 }
+.training-actions {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+}
 
 @media (max-width: 600px) {
   .player-management .profile-edit {

@@ -33,6 +33,9 @@ const HistoryPage = lazy(() =>
 const StatisticsPage = lazy(() =>
   import('./presentation/pages/StatisticsPage').then((module) => ({ default: module.StatisticsPage })),
 );
+const TrainingPage = lazy(() =>
+  import('./presentation/pages/TrainingPage').then((module) => ({ default: module.TrainingPage })),
+);
 const screenFallback = <main className="loading secondary-screen-loading">Открываем раздел…</main>;
 
 function playersForMatches(saved: readonly Player[], matches: readonly Match[]): readonly Player[] {
@@ -265,6 +268,22 @@ export default function App() {
       </>
     );
   }
+  if (screen === 'training') {
+    return (
+      <>
+        {updateBanner}
+        <Suspense fallback={screenFallback}>
+          <TrainingPage
+            players={data.players}
+            repository={services.competitive}
+            id={services.id}
+            now={services.now}
+            onBack={showHome}
+          />
+        </Suspense>
+      </>
+    );
+  }
 
   return (
     <>
@@ -386,6 +405,9 @@ export default function App() {
         inviteLink={company.inviteLink}
       />
       <nav className="home-links">
+        <button className="link-button" onClick={() => show('training')}>
+          Тренировка
+        </button>
         <button className="link-button" onClick={() => show('settings')}>
           Настройки
         </button>
