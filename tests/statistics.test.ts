@@ -282,14 +282,14 @@ describe('statistics projections', () => {
       match('b', 2, 'fixed_visits', [], 'b', ['a', 'b', 'c']),
       match('c', 3, 'x01', [], 'c', ['a', 'b', 'c']),
     ];
-    expect(headToHead(shared, 'a', 'b')).toEqual({
+    expect(headToHead(shared, 'a', 'b')).toMatchObject({
       sharedMatches: 0,
       playerAWins: 0,
       playerBWins: 0,
       draws: 0,
       excludedMultiPlayerMatches: 3,
     });
-    expect(headToHead(shared, 'a', 'b', 'x01')).toEqual({
+    expect(headToHead(shared, 'a', 'b', 'x01')).toMatchObject({
       sharedMatches: 0,
       playerAWins: 0,
       playerBWins: 0,

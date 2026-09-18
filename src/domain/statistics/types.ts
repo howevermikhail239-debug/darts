@@ -84,4 +84,11 @@ export type HeadToHeadStatistics = Readonly<{
   draws: number;
   /** Многосторонние матчи намеренно не смешиваются с классическими личными встречами. */
   excludedMultiPlayerMatches: number;
+  recentMatchIds: readonly string[];
+  currentStreak?: Readonly<{ playerId: string; wins: number }>;
+  longestStreak?: Readonly<{ playerId: string; wins: number }>;
+  playerAStatistics: PlayerStatistics;
+  playerBStatistics: PlayerStatistics;
+  playerAHighestCheckout: number;
+  playerBHighestCheckout: number;
 }>;

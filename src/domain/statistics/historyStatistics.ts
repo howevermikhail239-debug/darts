@@ -191,11 +191,52 @@ export function headToHead(
       (mode === 'all' || match.state.kind === mode),
   );
   const shared = candidates.filter((match) => match.players.length === 2);
+  const chronological = [...shared].sort((a, b) =>
+    (a.completedAt ?? a.createdAt).localeCompare(b.completedAt ?? b.createdAt),
+  );
+  const streaks: Array<{ playerId: PlayerId; wins: number }> = [];
+  let current: { playerId: PlayerId; wins: number } | undefined;
+  for (const match of chronological) {
+    if (!match.winnerId) {
+      current = undefined;
+      continue;
+    }
+    if (current?.playerId === match.winnerId) current = { ...current, wins: current.wins + 1 };
+    else current = { playerId: match.winnerId, wins: 1 };
+    streaks.push(current);
+  }
+  const checkoutOf = (playerId: PlayerId) =>
+    Math.max(
+      0,
+      ...shared.flatMap((match) =>
+        match.confirmedVisits
+          .filter((visit) => visit.playerId === playerId && visit.result === 'match_won')
+          .map((visit) => visit.awardedScore),
+      ),
+    );
   return {
     sharedMatches: shared.length,
     playerAWins: shared.filter((match) => match.winnerId === playerA).length,
     playerBWins: shared.filter((match) => match.winnerId === playerB).length,
     draws: shared.filter((match) => match.winnerId === undefined).length,
     excludedMultiPlayerMatches: candidates.length - shared.length,
+    recentMatchIds: chronological
+      .slice(-10)
+      .reverse()
+      .map((match) => match.id),
+    ...(current ? { currentStreak: current } : {}),
+    ...(streaks.length
+      ? { longestStreak: streaks.reduce((best, streak) => (streak.wins > best.wins ? streak : best)) }
+      : {}),
+    playerAStatistics: statisticsForVisits(
+      shared.flatMap((match) => match.confirmedVisits),
+      playerA,
+    ),
+    playerBStatistics: statisticsForVisits(
+      shared.flatMap((match) => match.confirmedVisits),
+      playerB,
+    ),
+    playerAHighestCheckout: checkoutOf(playerA),
+    playerBHighestCheckout: checkoutOf(playerB),
   };
 }
