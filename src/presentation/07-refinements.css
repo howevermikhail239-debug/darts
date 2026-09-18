@@ -639,6 +639,29 @@
   padding: 0 14px 12px;
 }
 
+.win-probability {
+  margin: 10px 14px;
+  color: var(--muted);
+}
+.win-probability > div {
+  display: flex;
+  overflow: hidden;
+  min-height: 28px;
+  margin-top: 5px;
+  border-radius: 8px;
+}
+.win-probability span {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  background: #385d89;
+  color: #fff;
+  font-weight: 700;
+}
+.win-probability span:nth-child(2n) {
+  background: #8a5b42;
+}
+
 @media (max-width: 600px) {
   .player-management .profile-edit {
     grid-template-columns: 1fr;

@@ -18,6 +18,7 @@ import { prepareResultShare } from '../../application/PrepareResultShare';
 import { notationOf } from '../../domain/darts/DartThrow';
 import { currentStreak } from '../../domain/statistics/todaySummary';
 import { userMessage } from '../errors/userMessage';
+import { x01WinProbability } from '../../domain/competitive/winProbability';
 type PendingDialog = {
   title: string;
   description: string;
@@ -160,6 +161,19 @@ export function GamePage({
   // PERF-5: тяжёлая часть модели — статистика матча — кэшируется по ссылке на матч
   // внутри `toGameViewModel`, поэтому повторный вызов на рендере дешёвый.
   const view = toGameViewModel(snapshot, players, persistentPlayerIds);
+  const probability = useMemo(() => {
+    const scores = Object.fromEntries(
+      snapshot.match.players.map((playerId) => [
+        playerId,
+        previousMatches.flatMap((match) =>
+          match.state.kind === 'x01'
+            ? match.confirmedVisits.filter((visit) => visit.playerId === playerId).map((visit) => visit.awardedScore)
+            : [],
+        ),
+      ]),
+    );
+    return x01WinProbability(snapshot.match, scores, snapshot.match.confirmedVisits.length + 1, 400);
+  }, [previousMatches, snapshot.match]);
   const undoVisit = snapshot.undoVisit;
   if (view.completed)
     return (
@@ -214,6 +228,18 @@ export function GamePage({
         </button>
       </header>
       <Scoreboard rows={view.scoreboard} />
+      {probability ? (
+        <section className="win-probability" aria-label="Оценка вероятности победы">
+          <small>Оценка вероятности победы{probability.confidence === 'low' ? ' · пока приблизительная' : ''}</small>
+          <div>
+            {snapshot.match.players.map((id) => (
+              <span key={id} style={{ width: `${probability.probabilities[id] ?? 0}%` }}>
+                {Math.round(probability.probabilities[id] ?? 0)}%
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
       {feedback?.kind === 'maximum' ? (
         <div key={feedback.key} className="maximum-celebration" role="status" aria-live="polite">
           <div className="particles" aria-hidden="true">
