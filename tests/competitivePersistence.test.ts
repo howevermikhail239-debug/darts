@@ -2,7 +2,11 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { exportBackup, restoreBackup } from '../src/application/BackupService';
 import type { BackupData } from '../src/application/ports/repositories';
-import { clearLocalData, IndexedDbBackupRepository, IndexedDbCompetitiveRepository } from '../src/infrastructure/persistence/IndexedDbRepositories';
+import {
+  clearLocalData,
+  IndexedDbBackupRepository,
+  IndexedDbCompetitiveRepository,
+} from '../src/infrastructure/persistence/IndexedDbRepositories';
 
 const session = {
   id: 'evening',
@@ -45,7 +49,10 @@ describe('competitive persistence', () => {
     expect(await competitive.listTraining('a')).toEqual([training]);
 
     const legacy: BackupData = { players: [], matches: [], settings: {} };
-    await restoreBackup(backup, JSON.stringify({ type: 'darts-scorekeeper-backup', version: 2, exportedAt: 'old', data: legacy }));
+    await restoreBackup(
+      backup,
+      JSON.stringify({ type: 'darts-scorekeeper-backup', version: 2, exportedAt: 'old', data: legacy }),
+    );
     expect(await competitive.listSessions()).toEqual([]);
     expect(await competitive.listTraining()).toEqual([]);
   });

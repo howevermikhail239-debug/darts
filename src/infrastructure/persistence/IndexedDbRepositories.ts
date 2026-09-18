@@ -1,6 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase, type IDBPTransaction, type StoreNames } from 'idb';
 import type { Match, Player } from '../../domain/match/models';
-import { isCompetitiveSession, isTrainingSession, type CompetitiveSession, type TrainingSession } from '../../domain/competitive/models';
+import {
+  isCompetitiveSession,
+  isTrainingSession,
+  type CompetitiveSession,
+  type TrainingSession,
+} from '../../domain/competitive/models';
 import { isStoredMatch, migrateMatch } from '../../domain/match/validation';
 import type {
   ActiveMatchIssue,
@@ -675,17 +680,17 @@ export class IndexedDbBackupRepository implements BackupRepository {
       competitiveSessions,
       trainingSessions,
     ] = await Promise.all([
-        connected.getAll('players'),
-        connected.getAll('matches'),
-        connected.get('meta', 'activeMatch'),
-        connected.get('meta', 'settings'),
-        connected.getAll('companies'),
-        connected.getAll('companyPlayers'),
-        connected.getAll('companyMatches'),
-        connected.getAllKeys('meta'),
-        connected.getAll('competitiveSessions'),
-        connected.getAll('trainingSessions'),
-      ]);
+      connected.getAll('players'),
+      connected.getAll('matches'),
+      connected.get('meta', 'activeMatch'),
+      connected.get('meta', 'settings'),
+      connected.getAll('companies'),
+      connected.getAll('companyPlayers'),
+      connected.getAll('companyMatches'),
+      connected.getAllKeys('meta'),
+      connected.getAll('competitiveSessions'),
+      connected.getAll('trainingSessions'),
+    ]);
     const migratedActive = active === undefined ? undefined : migrateActive(active);
     if (migratedActive !== undefined && !isActiveMatchEnvelope(migratedActive))
       throw new Error('Активный матч повреждён.');
@@ -790,7 +795,17 @@ export class IndexedDbBackupRepository implements BackupRepository {
     const trainingSessions = (data.trainingSessions ?? []).filter(isTrainingSession);
     const connected = await db();
     const transaction = connected.transaction(
-      ['players', 'matches', 'meta', 'companies', 'companyPlayers', 'companyMatches', 'deletedMatches', 'competitiveSessions', 'trainingSessions'],
+      [
+        'players',
+        'matches',
+        'meta',
+        'companies',
+        'companyPlayers',
+        'companyMatches',
+        'deletedMatches',
+        'competitiveSessions',
+        'trainingSessions',
+      ],
       'readwrite',
     );
     await transaction.objectStore('players').clear();
@@ -826,8 +841,10 @@ export class IndexedDbBackupRepository implements BackupRepository {
         }),
       );
     for (const row of lastSetups) await meta.put(structuredClone(row.template), `lastSetup:${row.context}`);
-    for (const session of competitiveSessions) await transaction.objectStore('competitiveSessions').put(structuredClone(session));
-    for (const session of trainingSessions) await transaction.objectStore('trainingSessions').put(structuredClone(session));
+    for (const session of competitiveSessions)
+      await transaction.objectStore('competitiveSessions').put(structuredClone(session));
+    for (const session of trainingSessions)
+      await transaction.objectStore('trainingSessions').put(structuredClone(session));
     if (activeEnvelope) await meta.put(structuredClone(activeEnvelope), 'activeMatch');
     await transaction.done;
     bumpStorageEpoch();
