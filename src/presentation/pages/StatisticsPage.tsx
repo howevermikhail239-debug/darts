@@ -17,6 +17,8 @@ import { PlayerIdentity } from '../components/PlayerIdentity';
 import { recentForm } from '../../domain/statistics/todaySummary';
 import { currentStreak } from '../../domain/statistics/todaySummary';
 import { DartboardHeatmap } from '../components/DartboardHeatmap';
+import { ratingsForMatches } from '../../domain/competitive/rating';
+import { x01Analytics } from '../../domain/statistics/x01Analytics';
 
 type Section = 'overview' | 'hits' | 'board' | 'distribution' | 'trends' | 'records';
 const modeLabels: Record<StatisticsMode, string> = { all: 'Все', x01: 'X01', fixed_visits: 'Набор очков' };
@@ -117,6 +119,8 @@ export function StatisticsPage({ matches, players, initialPlayerIds = [], onBack
       ) : selected ? (
         <PlayerDetails
           matches={matchesByPlayer.get(selected.id) ?? []}
+          allMatches={matches}
+          allPlayerIds={players.map((player) => player.id)}
           player={selected}
           mode={mode}
           period={period}
@@ -260,6 +264,8 @@ function Filters({
 
 function PlayerDetails({
   matches,
+  allMatches,
+  allPlayerIds,
   player,
   mode,
   period,
@@ -268,6 +274,8 @@ function PlayerDetails({
   onClose,
 }: {
   matches: readonly Match[];
+  allMatches: readonly Match[];
+  allPlayerIds: readonly PlayerId[];
   player: Player;
   mode: StatisticsMode;
   period: StatisticsPeriod;
@@ -292,12 +300,24 @@ function PlayerDetails({
     () => currentStreak(matches, player.id, player.statsResetAt),
     [matches, player.id, player.statsResetAt],
   );
+  const rating = useMemo(
+    () => ratingsForMatches(allMatches, allPlayerIds).get(player.id),
+    [allMatches, allPlayerIds, player.id],
+  );
+  const x01 = useMemo(() => x01Analytics(matches, player.id), [matches, player.id]);
   return (
     <>
       <button className="stats-back" onClick={onClose}>
         ← Все игроки
       </button>
-      <PlayerHeader player={player} stats={stats} form={form} sparkline={sparkline} {...(streak ? { streak } : {})} />
+      <PlayerHeader
+        player={player}
+        stats={stats}
+        form={form}
+        sparkline={sparkline}
+        {...(streak ? { streak } : {})}
+        {...(rating ? { rating } : {})}
+      />
       <Filters mode={mode} period={period} onMode={onMode} onPeriod={onPeriod} />
       <nav className="stats-tabs" aria-label="Раздел статистики">
         {(['overview', 'hits', 'board', 'distribution', 'trends', 'records'] as const).map((key) => (
@@ -318,7 +338,7 @@ function PlayerDetails({
         ))}
       </nav>
       {section === 'overview' ? (
-        <PlayerOverview stats={stats} />
+        <PlayerOverview stats={stats} x01={x01} />
       ) : section === 'hits' ? (
         <Hits stats={stats} />
       ) : section === 'board' ? (
@@ -350,12 +370,14 @@ function PlayerHeader({
   form,
   sparkline,
   streak,
+  rating,
 }: {
   player: Player;
   stats: PlayerHistoryStatistics;
   form: readonly ('win' | 'loss' | 'draw')[];
   sparkline: readonly Readonly<{ value: number }>[];
   streak?: Readonly<{ result: 'win' | 'loss' | 'draw'; count: number }>;
+  rating?: Readonly<{ rating: number; peak: number; games: number; provisional: boolean }>;
 }) {
   const labels = { win: 'В', loss: 'П', draw: 'Н' } as const;
   const formText = form.length ? form.map((result) => labels[result]).join(' · ') : 'Недостаточно завершённых матчей';
@@ -388,6 +410,13 @@ function PlayerHeader({
         <span>Среднее за 3 дротика</span>
         <strong>{number(stats.threeDartAverage)}</strong>
       </div>
+      {rating ? (
+        <div className="player-stat-average">
+          <span>Рейтинг X01</span>
+          <strong>{rating.rating}</strong>
+          <small>{rating.provisional ? `Предварительный · ${rating.games} матч.` : `Пик ${rating.peak}`}</small>
+        </div>
+      ) : null}
       <div className="recent-form">
         <span>Последние матчи</span>
         <div aria-label={`Форма: ${formText}`}>
@@ -415,7 +444,7 @@ function PlayerHeader({
   );
 }
 
-function PlayerOverview({ stats }: { stats: PlayerHistoryStatistics }) {
+function PlayerOverview({ stats, x01 }: { stats: PlayerHistoryStatistics; x01: ReturnType<typeof x01Analytics> }) {
   return (
     <section className="stat-section">
       <div className="metric-grid">
@@ -436,6 +465,29 @@ function PlayerOverview({ stats }: { stats: PlayerHistoryStatistics }) {
           <Metric key={key} label={key} value={stats.thresholds[key]} />
         ))}
       </div>
+      <details className="stat-section">
+        <summary>X01 аналитика</summary>
+        <div className="metric-grid">
+          <MetricCard label="First 9 Average" value={number(x01.first9Average)} />
+          <MetricCard
+            label="Checkout"
+            value={`${x01.successfulCheckouts} / ${x01.checkoutAttempts} · ${pct(x01.checkoutPercent)}`}
+          />
+          <MetricCard label="Лучший checkout" value={x01.highestCheckout || '—'} />
+          <MetricCard label="Bust" value={`${x01.busts} · ${pct(x01.bustRate)}`} />
+          <MetricCard label="Даблы" value={`${x01.doubleHits} / ${x01.doubleAttempts}`} />
+          <MetricCard label="Остаток после 9" value={x01.averageRemainingAfter[9]?.toFixed(0) ?? '—'} />
+        </div>
+        {Object.keys(x01.doubles).length ? (
+          <p className="stats-note">
+            {Object.entries(x01.doubles)
+              .map(([double, value]) => `${double} — ${value.hits} / ${value.attempts}`)
+              .join(' · ')}
+          </p>
+        ) : (
+          <p className="stats-note">Попадания по конкретным даблам появятся при вводе подходов по дротикам.</p>
+        )}
+      </details>
       {stats.matches < 2 ? (
         <p className="stats-note">
           Пока мало данных для динамики. Уже доступные показатели рассчитаны по сыгранным броскам.
@@ -722,7 +774,9 @@ function Comparison({
               <strong>
                 {pair[0]!.player.name} {meetings.playerAWins} : {meetings.playerBWins} {pair[1]!.player.name}
               </strong>
-              <span>Дуэлей: {meetings.sharedMatches} · Ничьи: {meetings.draws}</span>
+              <span>
+                Дуэлей: {meetings.sharedMatches} · Ничьи: {meetings.draws}
+              </span>
               {meetings.excludedMultiPlayerMatches ? (
                 <span>Матчи с 3+ игроками не входят в H2H: {meetings.excludedMultiPlayerMatches}</span>
               ) : null}
