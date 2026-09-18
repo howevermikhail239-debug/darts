@@ -5,6 +5,7 @@ import {
   IndexedDbBackupRepository,
   IndexedDbSharedRepository,
   IndexedDbLastSetupRepository,
+  IndexedDbCompetitiveRepository,
   clearLocalData,
   onStorageNotice,
 } from '../infrastructure/persistence/IndexedDbRepositories';
@@ -19,6 +20,7 @@ const id = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 const backups = new IndexedDbBackupRepository();
 const sharedRepository = new IndexedDbSharedRepository();
+const competitive = new IndexedDbCompetitiveRepository();
 
 const sharedForUi = {
   companies: () => sharedRepository.companies(),
@@ -37,6 +39,7 @@ export const services = {
   shared: sharedForUi,
   settings: new LocalSettingsRepository(),
   lastSetups: new IndexedDbLastSetupRepository(),
+  competitive,
   clearLocalData,
   onStorageNotice,
   id,

@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase, type IDBPTransaction, type StoreNames } from 'idb';
 import type { Match, Player } from '../../domain/match/models';
+import { isCompetitiveSession, isTrainingSession, type CompetitiveSession, type TrainingSession } from '../../domain/competitive/models';
 import { isStoredMatch, migrateMatch } from '../../domain/match/validation';
 import type {
   ActiveMatchIssue,
@@ -12,6 +13,7 @@ import type {
   SharedMatchState,
   BackupRepository,
   BackupData,
+  CompetitiveRepository,
   BackupCompanyMatch,
 } from '../../application/ports/repositories';
 import { emptyDraft, type VisitDraft } from '../../domain/match/VisitDraft';
@@ -22,7 +24,7 @@ import type { LastSetupRepository, LastSetupTemplate } from '../../application/L
 import { tabChannel } from '../TabChannel';
 
 const DB_NAME = 'dart-scorekeeper';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const SUPPORTED_SCHEMA_VERSION = 3;
 export const BLOCKED_MESSAGE = 'Закройте другие вкладки приложения: они мешают обновить локальную базу данных.';
 export const BLOCKING_MESSAGE =
@@ -53,6 +55,8 @@ interface DartsDb extends DBSchema {
     indexes: { byToken: string; byTokenState: [string, string] };
   };
   deletedMatches: { key: [string, string]; value: DeletedMatchRow };
+  competitiveSessions: { key: string; value: CompetitiveSession; indexes: { byCreatedAt: string } };
+  trainingSessions: { key: string; value: TrainingSession; indexes: { byStartedAt: string; byPlayerId: string } };
 }
 
 type UpgradeTransaction = IDBPTransaction<DartsDb, StoreNames<DartsDb>[], 'versionchange'>;
@@ -119,6 +123,15 @@ function upgrade(
   }
   if (!database.objectStoreNames.contains('deletedMatches'))
     database.createObjectStore('deletedMatches', { keyPath: ['token', 'matchId'] });
+  if (!database.objectStoreNames.contains('competitiveSessions')) {
+    const store = database.createObjectStore('competitiveSessions', { keyPath: 'id' });
+    store.createIndex('byCreatedAt', 'createdAt');
+  }
+  if (!database.objectStoreNames.contains('trainingSessions')) {
+    const store = database.createObjectStore('trainingSessions', { keyPath: 'id' });
+    store.createIndex('byStartedAt', 'startedAt');
+    store.createIndex('byPlayerId', 'playerId');
+  }
   if (oldVersion > 0 && oldVersion < 2) migrateMetaRows(transaction).catch(() => transaction.abort());
 }
 
@@ -625,11 +638,43 @@ export class IndexedDbLastSetupRepository implements LastSetupRepository {
     await (await db()).put('meta', structuredClone(template), `lastSetup:${context}`);
   }
 }
+/** Локальные сущности competitive-этапа; они не изменяют формат уже сохранённых матчей. */
+export class IndexedDbCompetitiveRepository implements CompetitiveRepository {
+  async listSessions(): Promise<readonly CompetitiveSession[]> {
+    const rows = await (await db()).getAllFromIndex('competitiveSessions', 'byCreatedAt');
+    return rows.filter(isCompetitiveSession).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async saveSession(session: CompetitiveSession): Promise<void> {
+    if (!isCompetitiveSession(session)) throw new Error('Игровая сессия повреждена.');
+    await (await db()).put('competitiveSessions', structuredClone(session));
+  }
+  async listTraining(playerId?: string): Promise<readonly TrainingSession[]> {
+    const connected = await db();
+    const rows = playerId
+      ? await connected.getAllFromIndex('trainingSessions', 'byPlayerId', playerId)
+      : await connected.getAllFromIndex('trainingSessions', 'byStartedAt');
+    return rows.filter(isTrainingSession).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+  async saveTraining(session: TrainingSession): Promise<void> {
+    if (!isTrainingSession(session)) throw new Error('Тренировочная сессия повреждена.');
+    await (await db()).put('trainingSessions', structuredClone(session));
+  }
+}
 export class IndexedDbBackupRepository implements BackupRepository {
   async readAll(): Promise<BackupData> {
     const connected = await db();
-    const [players, matches, active, settings, companies, companyPlayerRows, companyMatchRows, metaKeys] =
-      await Promise.all([
+    const [
+      players,
+      matches,
+      active,
+      settings,
+      companies,
+      companyPlayerRows,
+      companyMatchRows,
+      metaKeys,
+      competitiveSessions,
+      trainingSessions,
+    ] = await Promise.all([
         connected.getAll('players'),
         connected.getAll('matches'),
         connected.get('meta', 'activeMatch'),
@@ -638,6 +683,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
         connected.getAll('companyPlayers'),
         connected.getAll('companyMatches'),
         connected.getAllKeys('meta'),
+        connected.getAll('competitiveSessions'),
+        connected.getAll('trainingSessions'),
       ]);
     const migratedActive = active === undefined ? undefined : migrateActive(active);
     if (migratedActive !== undefined && !isActiveMatchEnvelope(migratedActive))
@@ -699,6 +746,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
         .map((row) => ({ token: row.token, players: row.players.filter(isPlayer) })),
       companyMatches,
       lastSetups,
+      competitiveSessions: competitiveSessions.filter(isCompetitiveSession),
+      trainingSessions: trainingSessions.filter(isTrainingSession),
     };
   }
   async replaceAll(data: BackupData): Promise<void> {
@@ -737,9 +786,11 @@ export class IndexedDbBackupRepository implements BackupRepository {
     const lastSetups = (data.lastSetups ?? []).filter(
       (row) => isRecord(row) && isString(row.context) && isLastSetup(row.template),
     );
+    const competitiveSessions = (data.competitiveSessions ?? []).filter(isCompetitiveSession);
+    const trainingSessions = (data.trainingSessions ?? []).filter(isTrainingSession);
     const connected = await db();
     const transaction = connected.transaction(
-      ['players', 'matches', 'meta', 'companies', 'companyPlayers', 'companyMatches', 'deletedMatches'],
+      ['players', 'matches', 'meta', 'companies', 'companyPlayers', 'companyMatches', 'deletedMatches', 'competitiveSessions', 'trainingSessions'],
       'readwrite',
     );
     await transaction.objectStore('players').clear();
@@ -748,6 +799,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
     await transaction.objectStore('companyPlayers').clear();
     await transaction.objectStore('companyMatches').clear();
     await transaction.objectStore('deletedMatches').clear();
+    await transaction.objectStore('competitiveSessions').clear();
+    await transaction.objectStore('trainingSessions').clear();
     const meta = transaction.objectStore('meta');
     await meta.delete('activeMatch');
     for (const key of await meta.getAllKeys()) if (String(key).startsWith('lastSetup:')) await meta.delete(key);
@@ -773,6 +826,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
         }),
       );
     for (const row of lastSetups) await meta.put(structuredClone(row.template), `lastSetup:${row.context}`);
+    for (const session of competitiveSessions) await transaction.objectStore('competitiveSessions').put(structuredClone(session));
+    for (const session of trainingSessions) await transaction.objectStore('trainingSessions').put(structuredClone(session));
     if (activeEnvelope) await meta.put(structuredClone(activeEnvelope), 'activeMatch');
     await transaction.done;
     bumpStorageEpoch();

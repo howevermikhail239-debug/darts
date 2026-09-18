@@ -1,9 +1,9 @@
 import type { BackupData, BackupRepository } from './ports/repositories';
 
 export const BACKUP_TYPE = 'darts-scorekeeper-backup';
-/** Версия 2 добавила секции компании (companies / companyPlayers / companyMatches) и lastSetups. */
-export const BACKUP_VERSION = 2;
-export const SUPPORTED_BACKUP_VERSIONS: readonly number[] = [1, 2];
+/** Версия 3 добавила игровые и тренировочные сессии; версии 1–2 по-прежнему читаются. */
+export const BACKUP_VERSION = 3;
+export const SUPPORTED_BACKUP_VERSIONS: readonly number[] = [1, 2, 3];
 export type BackupEnvelope = Readonly<{
   type: typeof BACKUP_TYPE;
   version: number;

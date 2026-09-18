@@ -1,6 +1,7 @@
 import type { VisitDraft } from '../../domain/match/VisitDraft';
 import type { Match, Player, PlayerId } from '../../domain/match/models';
 import type { LastSetupTemplate } from '../LastSetup';
+import type { CompetitiveSession, TrainingSession } from '../../domain/competitive/models';
 export type { LastSetupRepository } from '../LastSetup';
 
 export type ActiveVisitDraft = Readonly<{
@@ -53,6 +54,12 @@ export interface SettingsRepository {
   load(): Promise<Readonly<Record<string, string>>>;
   save(values: Readonly<Record<string, string>>): Promise<void>;
 }
+export interface CompetitiveRepository {
+  listSessions(): Promise<readonly CompetitiveSession[]>;
+  saveSession(session: CompetitiveSession): Promise<void>;
+  listTraining(playerId?: PlayerId): Promise<readonly TrainingSession[]>;
+  saveTraining(session: TrainingSession): Promise<void>;
+}
 
 /** Состояние локальной записи матча компании. */
 export type SharedMatchState = 'pending' | 'synced' | 'error' | 'rejected';
@@ -78,6 +85,8 @@ export type BackupData = Readonly<{
   companyPlayers?: readonly BackupCompanyPlayers[];
   companyMatches?: readonly BackupCompanyMatch[];
   lastSetups?: readonly BackupLastSetup[];
+  competitiveSessions?: readonly CompetitiveSession[];
+  trainingSessions?: readonly TrainingSession[];
 }>;
 export interface BackupRepository {
   readAll(): Promise<BackupData>;
