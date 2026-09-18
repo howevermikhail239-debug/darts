@@ -481,6 +481,7 @@ summary:focus-visible {
 .home-links {
   margin-top: 10px;
   padding-bottom: env(safe-area-inset-bottom);
+  flex-wrap: wrap;
 }
 
 /* Active match */
@@ -747,7 +748,8 @@ summary:focus-visible {
 }
 .checkout-slot {
   display: grid;
-  min-height: 30px;
+  /* Reserve the padded checkout hint so removing it cannot move the DartPad. */
+  min-height: 37px;
 }
 .checkout-slot .checkout {
   margin: 3px 0;
@@ -1265,7 +1267,8 @@ summary:focus-visible {
     display: none;
   }
   .draft-message-slot {
-    min-height: 0;
+    /* Keep the DartPad anchored when the draft hint is replaced by a ready state. */
+    min-height: 28px;
   }
   .stats-player-grid {
     grid-template-columns: 1fr;

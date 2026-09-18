@@ -368,7 +368,7 @@ test('mobile game keeps optional checkout and undo space out of an empty visit',
   const emptyPadY = (await pad.boundingBox())!.y;
 
   await expect(page.locator('.confirmed-undo')).toHaveCount(0);
-  await expect(page.locator('.checkout-slot')).toHaveCSS('min-height', '30px');
+  await expect(page.locator('.checkout-slot')).toHaveCSS('min-height', '37px');
 
   await page.getByRole('button', { name: 'Сектор 20, множитель 1' }).click();
   await page.getByRole('button', { name: 'Мимо' }).click();
