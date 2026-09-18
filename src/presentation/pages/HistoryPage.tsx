@@ -7,6 +7,7 @@ import { PlayerIdentity } from '../components/PlayerIdentity';
 import { Dialog } from '../components/Dialog';
 import { DartboardHeatmap } from '../components/DartboardHeatmap';
 import { userMessage } from '../errors/userMessage';
+import { matchTimeline } from '../../domain/statistics/matchTimeline';
 
 /** Размер страницы истории (PERF-7): раньше список рендерился целиком. */
 const PAGE_SIZE = 20;
@@ -222,6 +223,7 @@ function HistoryDetail({
 }) {
   // PERF-5: статистика матча считается один раз на раскрытую карточку, а не на каждый рендер.
   const stats = useMemo(() => statisticsForMatch(match), [match]);
+  const timeline = useMemo(() => matchTimeline(match), [match]);
   const [heatmapPlayerId, setHeatmapPlayerId] = useState(match.players[0]!);
   return (
     <div className="history-detail">
@@ -257,6 +259,32 @@ function HistoryDetail({
           </li>
         ))}
       </ol>
+      <details className="history-timeline">
+        <summary>Хронология матча · {timeline.length} событий</summary>
+        <ol>
+          {timeline.map((event, index) => (
+            <li key={`${event.kind}-${event.visitIndex ?? index}`}>
+              {event.kind === 'start'
+                ? 'Старт матча'
+                : event.kind === 'complete'
+                  ? event.playerId
+                    ? `Завершение: ${nameOf(match, event.playerId)}`
+                    : 'Завершение вничью'
+                  : event.kind === 'lead_change'
+                    ? `Смена лидера: ${nameOf(match, event.playerId!)}`
+                    : event.kind === 'high_score'
+                      ? `${nameOf(match, event.playerId!)} — ${event.score}`
+                      : event.kind === 'bust'
+                        ? `${nameOf(match, event.playerId!)} — перебор`
+                        : event.kind === 'checkout'
+                          ? `${nameOf(match, event.playerId!)} — checkout ${event.score}`
+                          : event.kind === 'checkout_attempt'
+                            ? `${nameOf(match, event.playerId!)} — попытка checkout`
+                            : `${nameOf(match, event.playerId!)} — ${event.score}`}
+            </li>
+          ))}
+        </ol>
+      </details>
       <section className="history-heatmap" aria-label="Тепловая карта матча">
         <nav aria-label="Выбрать игрока для тепловой карты">
           {match.players.map((id, index) => (
