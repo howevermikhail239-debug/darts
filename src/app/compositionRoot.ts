@@ -6,6 +6,7 @@ import {
   IndexedDbSharedRepository,
   IndexedDbLastSetupRepository,
   IndexedDbCompetitiveRepository,
+  IndexedDbIdentityRepository,
   clearLocalData,
   onStorageNotice,
 } from '../infrastructure/persistence/IndexedDbRepositories';
@@ -21,6 +22,7 @@ const now = () => new Date().toISOString();
 const backups = new IndexedDbBackupRepository();
 const sharedRepository = new IndexedDbSharedRepository();
 const competitive = new IndexedDbCompetitiveRepository();
+const identities = new IndexedDbIdentityRepository();
 
 const sharedForUi = {
   companies: () => sharedRepository.companies(),
@@ -40,6 +42,7 @@ export const services = {
   settings: new LocalSettingsRepository(),
   lastSetups: new IndexedDbLastSetupRepository(),
   competitive,
+  identities,
   clearLocalData,
   onStorageNotice,
   id,

@@ -18,6 +18,7 @@ import type {
   SharedMatchState,
   BackupRepository,
   BackupData,
+  IdentityRepository,
   CompetitiveRepository,
   BackupCompanyMatch,
 } from '../../application/ports/repositories';
@@ -685,6 +686,42 @@ export class IndexedDbCompetitiveRepository implements CompetitiveRepository {
   async saveTraining(session: TrainingSession): Promise<void> {
     if (!isTrainingSession(session)) throw new Error('Тренировочная сессия повреждена.');
     await (await db()).put('trainingSessions', structuredClone(session));
+  }
+}
+/** Identity and owner secrets deliberately use the existing meta store: DB_VERSION stays rollback-compatible. */
+export class IndexedDbIdentityRepository implements IdentityRepository {
+  async listIdentities(): Promise<readonly PersonIdentity[]> {
+    const value = await (await db()).get('meta', 'personIdentities');
+    return Array.isArray(value) ? value.filter(isPersonIdentity).map((item) => structuredClone(item)) : [];
+  }
+  async saveIdentity(identity: PersonIdentity): Promise<void> {
+    if (!isPersonIdentity(identity)) throw new Error('Связь профиля повреждена.');
+    const current = await this.listIdentities();
+    await (
+      await db()
+    ).put(
+      'meta',
+      structuredClone([...current.filter((item) => item.id !== identity.id), identity]),
+      'personIdentities',
+    );
+  }
+  async ownerKey(companyToken: string): Promise<string | undefined> {
+    const value = await (await db()).get('meta', 'ownerCredentials');
+    return Array.isArray(value)
+      ? value.filter(isOwnerCredential).find((item) => item.companyToken === companyToken)?.ownerKey
+      : undefined;
+  }
+  async saveOwnerKey(companyToken: string, ownerKey: string): Promise<void> {
+    if (!isString(companyToken) || !isString(ownerKey)) throw new Error('Ключ владельца повреждён.');
+    const value = await (await db()).get('meta', 'ownerCredentials');
+    const current = Array.isArray(value) ? value.filter(isOwnerCredential) : [];
+    await (
+      await db()
+    ).put(
+      'meta',
+      [...current.filter((item) => item.companyToken !== companyToken), { companyToken, ownerKey }],
+      'ownerCredentials',
+    );
   }
 }
 export class IndexedDbBackupRepository implements BackupRepository {

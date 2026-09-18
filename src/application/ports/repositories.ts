@@ -61,6 +61,12 @@ export interface CompetitiveRepository {
   listTraining(playerId?: PlayerId): Promise<readonly TrainingSession[]>;
   saveTraining(session: TrainingSession): Promise<void>;
 }
+export interface IdentityRepository {
+  listIdentities(): Promise<readonly PersonIdentity[]>;
+  saveIdentity(identity: PersonIdentity): Promise<void>;
+  ownerKey(companyToken: string): Promise<string | undefined>;
+  saveOwnerKey(companyToken: string, ownerKey: string): Promise<void>;
+}
 
 /** Состояние локальной записи матча компании. */
 export type SharedMatchState = 'pending' | 'synced' | 'error' | 'rejected';
