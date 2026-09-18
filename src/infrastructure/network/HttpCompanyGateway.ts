@@ -5,6 +5,7 @@ import {
   type CompanyGateway,
   type CompanySnapshot,
   type SharedCompany,
+  type IdentityClaim,
 } from '../../application/ports/companyGateway';
 
 /** Зеркало серверного ограничения на размер тела запроса (server.mjs). */
@@ -106,6 +107,25 @@ const sharedPlayer = (value: unknown): Player | undefined => {
     ...(typeof value.statsResetAt === 'string' ? { statsResetAt: value.statsResetAt } : {}),
   };
 };
+const claim = (value: unknown): IdentityClaim => {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.companyPlayerId !== 'string' ||
+    typeof value.displayName !== 'string' ||
+    typeof value.createdAt !== 'string' ||
+    !['pending', 'approved', 'rejected', 'revoked'].includes(String(value.status))
+  )
+    return invalidResponse();
+  return {
+    id: value.id,
+    companyPlayerId: value.companyPlayerId,
+    displayName: value.displayName,
+    createdAt: value.createdAt,
+    status: value.status as IdentityClaim['status'],
+    ...(typeof value.resolvedAt === 'string' ? { resolvedAt: value.resolvedAt } : {}),
+  };
+};
 
 export class HttpCompanyGateway implements CompanyGateway {
   async createCompany(name: string): Promise<SharedCompany> {
@@ -174,5 +194,43 @@ export class HttpCompanyGateway implements CompanyGateway {
     await request(`/api/groups/${encodeURIComponent(token)}/matches/${encodeURIComponent(matchId)}`, {
       method: 'DELETE',
     });
+  }
+  async createIdentityClaim(
+    token: string,
+    companyPlayerId: string,
+    displayName: string,
+  ): Promise<{ claim: IdentityClaim; claimKey: string }> {
+    const result = await request(`/api/groups/${encodeURIComponent(token)}/identity-claims`, {
+      method: 'POST',
+      body: JSON.stringify({ companyPlayerId, displayName }),
+    });
+    if (!isRecord(result) || typeof result.claimKey !== 'string') return invalidResponse();
+    return { claim: claim(result.claim), claimKey: result.claimKey };
+  }
+  async identityClaimStatus(token: string, claimId: string, claimKey: string): Promise<IdentityClaim> {
+    const result = await request(
+      `/api/groups/${encodeURIComponent(token)}/identity-claims/${encodeURIComponent(claimId)}`,
+      { headers: { 'x-claim-key': claimKey } },
+    );
+    return isRecord(result) ? claim(result.claim) : invalidResponse();
+  }
+  async ownerClaims(token: string, ownerKey: string): Promise<readonly IdentityClaim[]> {
+    const result = await request(`/api/groups/${encodeURIComponent(token)}/identity-claims`, {
+      headers: { 'x-owner-key': ownerKey },
+    });
+    if (!isRecord(result) || !Array.isArray(result.claims)) return invalidResponse();
+    return result.claims.map(claim);
+  }
+  async resolveIdentityClaim(
+    token: string,
+    claimId: string,
+    ownerKey: string,
+    action: 'approve' | 'reject' | 'revoke',
+  ): Promise<IdentityClaim> {
+    const result = await request(
+      `/api/groups/${encodeURIComponent(token)}/identity-claims/${encodeURIComponent(claimId)}/${action}`,
+      { method: 'POST', headers: { 'x-owner-key': ownerKey }, body: '{}' },
+    );
+    return isRecord(result) ? claim(result.claim) : invalidResponse();
   }
 }

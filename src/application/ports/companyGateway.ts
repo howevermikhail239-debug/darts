@@ -8,6 +8,14 @@ export type CompanySnapshot = Readonly<{
   skippedMatches?: number;
   skippedPlayers?: number;
 }>;
+export type IdentityClaim = Readonly<{
+  id: string;
+  companyPlayerId: string;
+  displayName: string;
+  createdAt: string;
+  status: 'pending' | 'approved' | 'rejected' | 'revoked';
+  resolvedAt?: string;
+}>;
 
 /** Ошибка транспорта с кодом ответа. Позволяет отличать неустранимые отказы от временных. */
 export class HttpError extends Error {
@@ -43,4 +51,17 @@ export interface CompanyGateway {
   deletePlayer(token: string, playerId: string): Promise<void>;
   uploadMatch(token: string, match: Match): Promise<void>;
   deleteMatch(token: string, matchId: string): Promise<void>;
+  createIdentityClaim?(
+    token: string,
+    companyPlayerId: string,
+    displayName: string,
+  ): Promise<{ claim: IdentityClaim; claimKey: string }>;
+  identityClaimStatus?(token: string, claimId: string, claimKey: string): Promise<IdentityClaim>;
+  ownerClaims?(token: string, ownerKey: string): Promise<readonly IdentityClaim[]>;
+  resolveIdentityClaim?(
+    token: string,
+    claimId: string,
+    ownerKey: string,
+    action: 'approve' | 'reject' | 'revoke',
+  ): Promise<IdentityClaim>;
 }
