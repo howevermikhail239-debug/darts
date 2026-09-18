@@ -228,18 +228,6 @@ export function GamePage({
         </button>
       </header>
       <Scoreboard rows={view.scoreboard} />
-      {probability ? (
-        <section className="win-probability" aria-label="Оценка вероятности победы">
-          <small>Оценка вероятности победы{probability.confidence === 'low' ? ' · пока приблизительная' : ''}</small>
-          <div>
-            {snapshot.match.players.map((id) => (
-              <span key={id} style={{ width: `${probability.probabilities[id] ?? 0}%` }}>
-                {Math.round(probability.probabilities[id] ?? 0)}%
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : null}
       {feedback?.kind === 'maximum' ? (
         <div key={feedback.key} className="maximum-celebration" role="status" aria-live="polite">
           <div className="particles" aria-hidden="true">
@@ -375,6 +363,18 @@ export function GamePage({
           }
         />
       ) : null}{' '}
+      {probability ? (
+        <section className="win-probability" aria-label="Оценка вероятности победы">
+          <small>Оценка вероятности победы{probability.confidence === 'low' ? ' · пока приблизительная' : ''}</small>
+          <div>
+            {snapshot.match.players.map((id) => (
+              <span key={id} style={{ width: `${probability.probabilities[id] ?? 0}%` }}>
+                {Math.round(probability.probabilities[id] ?? 0)}%
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
       {error ? (
         <div className="error" role="alert">
           {error}
