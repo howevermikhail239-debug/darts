@@ -3,6 +3,8 @@ import type { CompetitiveRepository } from '../../application/ports/repositories
 import type { CompetitiveSession } from '../../domain/competitive/models';
 import type { Match, Player, PlayerId } from '../../domain/match/models';
 import { statisticsForPlayerHistory } from '../../domain/statistics/StatisticsCalculator';
+import { x01Analytics } from '../../domain/statistics/x01Analytics';
+import { ratingsForMatches } from '../../domain/competitive/rating';
 
 const titleFor = (session: CompetitiveSession) =>
   session.title ?? `Игровая сессия · ${new Date(session.createdAt).toLocaleDateString('ru-RU')}`;
@@ -121,6 +123,22 @@ function SessionCard({
     () => matches.filter((match) => session.matchIds.includes(match.id)),
     [matches, session.matchIds],
   );
+  const ratingsBefore = useMemo(
+    () =>
+      ratingsForMatches(
+        matches.filter((match) => match.createdAt < session.createdAt),
+        session.playerIds,
+      ),
+    [matches, session.createdAt, session.playerIds],
+  );
+  const ratingsAfter = useMemo(
+    () =>
+      ratingsForMatches(
+        [...matches.filter((match) => match.createdAt < session.createdAt), ...sessionMatches],
+        session.playerIds,
+      ),
+    [matches, session.createdAt, session.playerIds, sessionMatches],
+  );
   return (
     <section className="stat-section">
       <h2>{titleFor(session)}</h2>
@@ -130,10 +148,14 @@ function SessionCard({
       {session.playerIds.map((id) => {
         const player = players.find((item) => item.id === id);
         const stats = statisticsForPlayerHistory(sessionMatches, id, 'all', 'all');
+        const x01 = x01Analytics(sessionMatches, id);
+        const delta = (ratingsAfter.get(id)?.rating ?? 1500) - (ratingsBefore.get(id)?.rating ?? 1500);
         return (
           <p key={id}>
-            <strong>{player?.name ?? 'Игрок'}</strong> · {stats.wins} побед · Avg {stats.threeDartAverage.toFixed(1)} ·
-            лучший {stats.bestVisit}
+            <strong>{player?.name ?? 'Игрок'}</strong> · {stats.wins}-{stats.losses}-{stats.draws} ·{' '}
+            {stats.winRate.toFixed(0)}% · Avg {stats.threeDartAverage.toFixed(1)} · лучший {stats.bestVisit} · checkout{' '}
+            {x01.highestCheckout || '—'} · рейтинг {delta >= 0 ? '+' : ''}
+            {delta}
           </p>
         );
       })}
