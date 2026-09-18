@@ -479,7 +479,7 @@ function Summary({
     setShareNote(undefined);
     try {
       const { shareResultCard } = await import('../../infrastructure/share/BrowserResultShare');
-      const outcome = await shareResultCard(prepareResultShare(m, players));
+      const outcome = await shareResultCard(prepareResultShare(m, players, previousMatches));
       if (outcome === 'downloaded') setShareNote('PNG-карточка сохранена на устройство.');
       else if (outcome === 'shared') setShareNote('Карточка передана в меню «Поделиться».');
     } catch {
