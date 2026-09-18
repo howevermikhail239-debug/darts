@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type Screen = 'home' | 'game' | 'history' | 'statistics' | 'settings' | 'training';
+export type Screen = 'home' | 'game' | 'history' | 'statistics' | 'settings' | 'training' | 'sessions';
 
-const SCREENS: readonly Screen[] = ['home', 'game', 'history', 'statistics', 'settings', 'training'];
+const SCREENS: readonly Screen[] = ['home', 'game', 'history', 'statistics', 'settings', 'training', 'sessions'];
 const isScreen = (value: unknown): value is Screen => typeof value === 'string' && SCREENS.includes(value as Screen);
 const historyState = (): Record<string, unknown> => {
   const state = window.history.state as unknown;

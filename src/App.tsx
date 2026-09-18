@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Match, Player, PlayerId } from './domain/match/models';
+import type { CompetitiveSession } from './domain/competitive/models';
 import { companySync, services } from './app/compositionRoot';
 import { SetupPage } from './presentation/pages/SetupPage';
 import { GamePage } from './presentation/pages/GamePage';
@@ -35,6 +36,9 @@ const StatisticsPage = lazy(() =>
 );
 const TrainingPage = lazy(() =>
   import('./presentation/pages/TrainingPage').then((module) => ({ default: module.TrainingPage })),
+);
+const SessionsPage = lazy(() =>
+  import('./presentation/pages/SessionsPage').then((module) => ({ default: module.SessionsPage })),
 );
 const screenFallback = <main className="loading secondary-screen-loading">Открываем раздел…</main>;
 
@@ -81,6 +85,7 @@ const wipeDescriptionFor = (counts: LocalDataCounts | undefined): string => {
 export default function App() {
   const { screen, show, replace } = useScreenHistory();
   const [statisticsContext, setStatisticsContext] = useState<readonly PlayerId[]>([]);
+  const [competitiveSession, setCompetitiveSession] = useState<CompetitiveSession>();
   const [confirmResumeAbandon, setConfirmResumeAbandon] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [wipeCounts, setWipeCounts] = useState<LocalDataCounts>();
@@ -193,9 +198,25 @@ export default function App() {
           previousMatches={data.history}
           onChange={match.setSnapshot}
           onBack={match.backToHome}
-          onClosed={() =>
-            void match.close().catch((cause: unknown) => setActionError(userMessage(cause, 'Не удалось закрыть матч.')))
-          }
+          onClosed={(completedMatch) => {
+            void match
+              .close()
+              .catch((cause: unknown) => setActionError(userMessage(cause, 'Не удалось закрыть матч.')));
+            if (
+              completedMatch &&
+              competitiveSession &&
+              completedMatch.players.every((id) => competitiveSession.playerIds.includes(id))
+            ) {
+              const updated = {
+                ...competitiveSession,
+                matchIds: [...new Set([...competitiveSession.matchIds, completedMatch.id])],
+              };
+              setCompetitiveSession(updated);
+              void services.competitive
+                .saveSession(updated)
+                .catch((cause: unknown) => setActionError(userMessage(cause, 'Не удалось обновить игровую сессию.')));
+            }
+          }}
           onStatistics={async (completedMatch) => {
             const relevantPlayers = persistentParticipantsInMatch(data.players, completedMatch);
             await match.close();
@@ -279,6 +300,27 @@ export default function App() {
             id={services.id}
             now={services.now}
             onBack={showHome}
+          />
+        </Suspense>
+      </>
+    );
+  }
+  if (screen === 'sessions') {
+    return (
+      <>
+        <>{updateBanner}</>
+        <Suspense fallback={screenFallback}>
+          <SessionsPage
+            players={data.players}
+            matches={data.history}
+            repository={services.competitive}
+            id={services.id}
+            now={services.now}
+            onBack={showHome}
+            onUse={(session) => {
+              setCompetitiveSession(session);
+              showHome();
+            }}
           />
         </Suspense>
       </>
@@ -405,6 +447,9 @@ export default function App() {
         inviteLink={company.inviteLink}
       />
       <nav className="home-links">
+        <button className="link-button" onClick={() => show('sessions')}>
+          {competitiveSession ? `Сессия: ${competitiveSession.title ?? 'активна'}` : 'Игровые сессии'}
+        </button>
         <button className="link-button" onClick={() => show('training')}>
           Тренировка
         </button>

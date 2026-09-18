@@ -33,7 +33,7 @@ type Props = {
   previousMatches: readonly Match[];
   onChange: (s: SessionSnapshot) => void;
   onBack: () => void;
-  onClosed: () => void;
+  onClosed: (completedMatch?: Match) => void;
   onStatistics: (match: Match) => Promise<void>;
   onRematch: (match: Match) => Promise<void>;
   persistentPlayerIds: readonly string[];
@@ -184,7 +184,7 @@ export function GamePage({
         onUndo={async () => update(await session.undo())}
         onFinish={async () => {
           await session.finalize();
-          onClosed();
+          onClosed(snapshot.match);
         }}
         onStatistics={async () => {
           await session.finalize();
