@@ -153,7 +153,7 @@ describe('IndexedDB schema v1 -> v2 migration', () => {
     expect(await reopened.companies()).toHaveLength(1);
     expect(await reopened.matches(token)).toHaveLength(2);
     expect(await metaKeys()).toEqual(['activeMatch', 'lastSetup:local', 'settings']);
-    expect(DB_VERSION).toBe(2);
+    expect(DB_VERSION).toBe(3);
   });
 
   it('creates a fresh database at the current version when nothing existed', async () => {

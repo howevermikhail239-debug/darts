@@ -68,7 +68,7 @@ describe('backup with company data', () => {
     const envelope = JSON.parse(json) as { type: string; version: number; data: Record<string, unknown> };
 
     expect(envelope.type).toBe(BACKUP_TYPE);
-    expect(envelope.version).toBe(2);
+    expect(envelope.version).toBe(3);
     expect(envelope.data.companies).toEqual([{ token, name: 'Лига', createdAt: '2026-08-02T10:00:00.000Z' }]);
     expect(envelope.data.companyPlayers).toMatchObject([{ token, players: [{ id: 'p1' }] }]);
     expect(
