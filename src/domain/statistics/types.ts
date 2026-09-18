@@ -81,5 +81,7 @@ export type HeadToHeadStatistics = Readonly<{
   sharedMatches: number;
   playerAWins: number;
   playerBWins: number;
-  otherPlayerWins: number;
+  draws: number;
+  /** Многосторонние матчи намеренно не смешиваются с классическими личными встречами. */
+  excludedMultiPlayerMatches: number;
 }>;

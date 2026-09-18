@@ -283,16 +283,18 @@ describe('statistics projections', () => {
       match('c', 3, 'x01', [], 'c', ['a', 'b', 'c']),
     ];
     expect(headToHead(shared, 'a', 'b')).toEqual({
-      sharedMatches: 3,
-      playerAWins: 1,
-      playerBWins: 1,
-      otherPlayerWins: 1,
+      sharedMatches: 0,
+      playerAWins: 0,
+      playerBWins: 0,
+      draws: 0,
+      excludedMultiPlayerMatches: 3,
     });
     expect(headToHead(shared, 'a', 'b', 'x01')).toEqual({
-      sharedMatches: 2,
-      playerAWins: 1,
+      sharedMatches: 0,
+      playerAWins: 0,
       playerBWins: 0,
-      otherPlayerWins: 1,
+      draws: 0,
+      excludedMultiPlayerMatches: 2,
     });
   });
 });

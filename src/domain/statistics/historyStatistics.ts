@@ -182,7 +182,7 @@ export function headToHead(
   mode: StatisticsMode = 'all',
   statsResetAt?: string,
 ): HeadToHeadStatistics {
-  const shared = matches.filter(
+  const candidates = matches.filter(
     (match) =>
       match.status === 'completed' &&
       match.players.includes(playerA) &&
@@ -190,13 +190,12 @@ export function headToHead(
       afterReset(match, statsResetAt) &&
       (mode === 'all' || match.state.kind === mode),
   );
+  const shared = candidates.filter((match) => match.players.length === 2);
   return {
     sharedMatches: shared.length,
     playerAWins: shared.filter((match) => match.winnerId === playerA).length,
     playerBWins: shared.filter((match) => match.winnerId === playerB).length,
-    otherPlayerWins: shared.filter(
-      (match) =>
-        match.winnerId !== undefined && match.winnerId && match.winnerId !== playerA && match.winnerId !== playerB,
-    ).length,
+    draws: shared.filter((match) => match.winnerId === undefined).length,
+    excludedMultiPlayerMatches: candidates.length - shared.length,
   };
 }

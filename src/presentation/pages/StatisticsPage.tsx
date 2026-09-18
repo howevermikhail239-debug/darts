@@ -722,8 +722,10 @@ function Comparison({
               <strong>
                 {pair[0]!.player.name} {meetings.playerAWins} : {meetings.playerBWins} {pair[1]!.player.name}
               </strong>
-              <span>Совместных матчей: {meetings.sharedMatches}</span>
-              <span>Победы других игроков: {meetings.otherPlayerWins}</span>
+              <span>Дуэлей: {meetings.sharedMatches} · Ничьи: {meetings.draws}</span>
+              {meetings.excludedMultiPlayerMatches ? (
+                <span>Матчи с 3+ игроками не входят в H2H: {meetings.excludedMultiPlayerMatches}</span>
+              ) : null}
             </article>
           ) : null}
         </>
