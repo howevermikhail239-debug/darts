@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { access, mkdir, readFile, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
@@ -108,6 +108,16 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
+/** Owner credentials are separate from invite tokens and only their hash is stored. */
+const ownerKey = () => randomBytes(32).toString('base64url');
+const ownerHash = (key) => createHash('sha256').update(key).digest();
+const hasOwnerCredential = (req, group) => {
+  const value = req.headers['x-owner-key'];
+  if (typeof value !== 'string' || typeof group.ownerKeyHash !== 'string') return false;
+  const expected = Buffer.from(group.ownerKeyHash, 'hex');
+  const actual = ownerHash(value);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+};
 
 class RequestError extends Error {
   constructor(code, status) {
@@ -436,11 +446,86 @@ const createGroup = async (req, res, context) => {
     if (Object.keys(next.groups).length >= QUOTA.groups) {
       return { commit: false, value: 'too_many_groups' };
     }
-    next.groups[tokenHash(token)] = { id: randomUUID(), name, createdAt, players: {}, matches: {} };
-    return { value: 'created' };
+    const key = ownerKey();
+    next.groups[tokenHash(token)] = {
+      id: randomUUID(),
+      name,
+      createdAt,
+      players: {},
+      matches: {},
+      ownerKeyHash: ownerHash(key).toString('hex'),
+      identityClaims: {},
+    };
+    return { value: { key } };
   });
   if (outcome === 'too_many_groups') return send(res, 409, { error: 'too_many_groups' });
-  return send(res, 201, { token, group: { name, createdAt } });
+  // Returned exactly once to the creator. It is neither an invite token nor part of GET responses.
+  return send(res, 201, { token, ownerKey: outcome.key, group: { name, createdAt } });
+};
+
+const validClaim = (value) =>
+  record(value) && UUID_V4.test(String(value.companyPlayerId)) && validName(value.displayName);
+const claimSecret = () => randomBytes(32).toString('base64url');
+const claimant = (req, claim) => {
+  const value = req.headers['x-claim-key'];
+  if (typeof value !== 'string' || typeof claim.claimKeyHash !== 'string') return false;
+  const expected = Buffer.from(claim.claimKeyHash, 'hex');
+  const actual = ownerHash(value);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+};
+const publicClaim = (claim) => ({
+  id: claim.id,
+  companyPlayerId: claim.companyPlayerId,
+  displayName: claim.displayName,
+  createdAt: claim.createdAt,
+  status: claim.status,
+  ...(claim.resolvedAt ? { resolvedAt: claim.resolvedAt } : {}),
+});
+const createClaim = async (req, res, context, token) => {
+  const body = await readJson(req, res, context);
+  if (!validClaim(body)) return send(res, 400, { error: 'invalid_claim' });
+  const secret = claimSecret();
+  const createdAt = new Date().toISOString();
+  const id = randomUUID();
+  const result = await transact(tokenHash(token), (next) => {
+    const group = next.groups[tokenHash(token)];
+    if (!own(group.players, body.companyPlayerId)) return { commit: false, value: undefined };
+    group.identityClaims ??= {};
+    group.identityClaims[id] = {
+      id,
+      companyPlayerId: body.companyPlayerId,
+      displayName: body.displayName.trim(),
+      createdAt,
+      status: 'pending',
+      claimKeyHash: ownerHash(secret).toString('hex'),
+    };
+    return { value: group.identityClaims[id] };
+  });
+  return result
+    ? send(res, 201, { claim: publicClaim(result), claimKey: secret })
+    : send(res, 404, { error: 'not_found' });
+};
+const ownerClaims = (req, res, group) =>
+  hasOwnerCredential(req, group)
+    ? send(res, 200, { claims: Object.values(group.identityClaims ?? {}).map(publicClaim) })
+    : send(res, 403, { error: 'owner_required' });
+const claimStatus = (req, res, group, claimId) => {
+  const claim = group.identityClaims?.[claimId];
+  if (!claim) return send(res, 404, { error: 'not_found' });
+  return claimant(req, claim)
+    ? send(res, 200, { claim: publicClaim(claim) })
+    : send(res, 403, { error: 'claim_capability_required' });
+};
+const resolveClaim = async (req, res, token, group, claimId, status) => {
+  if (!hasOwnerCredential(req, group)) return send(res, 403, { error: 'owner_required' });
+  const claim = await transact(tokenHash(token), (next) => {
+    const current = next.groups[tokenHash(token)].identityClaims?.[claimId];
+    if (!current) return { commit: false, value: undefined };
+    current.status = status;
+    current.resolvedAt = new Date().toISOString();
+    return { value: current };
+  });
+  return claim ? send(res, 200, { claim: publicClaim(claim) }) : send(res, 404, { error: 'not_found' });
 };
 
 const createPlayer = async (req, res, context, token) => {
@@ -555,6 +640,17 @@ const handleGroupRoutes = async (req, res, context, parts) => {
   if (parts[3] === 'players' && parts.length === 4 && method === 'GET') {
     return send(res, 200, { players: Object.values(group.players) });
   }
+  if (parts[3] === 'identity-claims' && parts.length === 4 && method === 'POST')
+    return createClaim(req, res, context, token);
+  if (parts[3] === 'identity-claims' && parts.length === 4 && method === 'GET') return ownerClaims(req, res, group);
+  if (parts[3] === 'identity-claims' && parts[4] && parts.length === 5 && method === 'GET')
+    return claimStatus(req, res, group, parts[4]);
+  if (parts[3] === 'identity-claims' && parts[4] && parts[5] === 'approve' && method === 'POST')
+    return resolveClaim(req, res, token, group, parts[4], 'approved');
+  if (parts[3] === 'identity-claims' && parts[4] && parts[5] === 'reject' && method === 'POST')
+    return resolveClaim(req, res, token, group, parts[4], 'rejected');
+  if (parts[3] === 'identity-claims' && parts[4] && parts[5] === 'revoke' && method === 'POST')
+    return resolveClaim(req, res, token, group, parts[4], 'revoked');
   if (parts[3] === 'players' && parts.length === 4 && method === 'POST') {
     return createPlayer(req, res, context, token);
   }

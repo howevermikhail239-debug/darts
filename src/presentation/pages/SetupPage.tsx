@@ -777,29 +777,29 @@ function GameModeSelector({
                 className={outRule === 'straight' ? 'selected' : ''}
                 onClick={() => onOutRule('straight')}
               >
-                Любым попаданием
+                Любое завершение
               </button>
               <button
                 type="button"
                 className={outRule === 'double' ? 'selected' : ''}
                 onClick={() => onOutRule('double')}
               >
-                Удвоением
+                Завершение удвоением
               </button>
               <button
                 type="button"
                 className={outRule === 'master' ? 'selected' : ''}
                 onClick={() => onOutRule('master')}
               >
-                Master out
+                Мастер-аут
               </button>
             </div>
             <p className="hint">
               {outRule === 'straight'
-                ? 'Для победы достаточно получить ровно 0.'
+                ? 'Straight Out · Последний дротик может попасть в любой сектор.'
                 : outRule === 'double'
-                  ? 'Последний дротик должен попасть в удвоение или Bull.'
-                  : 'Последний дротик должен попасть в удвоение, утроение или Bull.'}
+                  ? 'Double Out · Последний дротик должен попасть в удвоение или Bull.'
+                  : 'Master Out · Последний дротик должен попасть в удвоение, утроение или Bull.'}
             </p>
           </fieldset>
           <fieldset>

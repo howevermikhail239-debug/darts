@@ -2,6 +2,7 @@ import type { VisitDraft } from '../../domain/match/VisitDraft';
 import type { Match, Player, PlayerId } from '../../domain/match/models';
 import type { LastSetupTemplate } from '../LastSetup';
 import type { CompetitiveSession, TrainingSession } from '../../domain/competitive/models';
+import type { PersonIdentity } from '../../domain/identities/PersonIdentity';
 export type { LastSetupRepository } from '../LastSetup';
 
 export type ActiveVisitDraft = Readonly<{
@@ -87,6 +88,9 @@ export type BackupData = Readonly<{
   lastSetups?: readonly BackupLastSetup[];
   competitiveSessions?: readonly CompetitiveSession[];
   trainingSessions?: readonly TrainingSession[];
+  /** Sensitive section: contains local owner credentials and must never be shared casually. */
+  identities?: readonly PersonIdentity[];
+  ownerCredentials?: readonly Readonly<{ companyToken: string; ownerKey: string }>[];
 }>;
 export interface BackupRepository {
   readAll(): Promise<BackupData>;

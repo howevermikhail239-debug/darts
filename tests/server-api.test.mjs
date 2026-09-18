@@ -645,6 +645,42 @@ test('bodies must be declared as JSON', async () => {
   }
 });
 
+test('owner credentials are separate from invite tokens and protect identity claims', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'darts-owner-'));
+  const file = join(dir, 'store.json');
+  let server;
+  try {
+    server = await start(file);
+    const company = await json(`${server.url}/api/groups`, jsonPost({ name: 'Owner' }));
+    assert.equal(company.status, 201);
+    assert.match(company.body.ownerKey, /^[A-Za-z0-9_-]{43}$/);
+    const token = company.body.token;
+    const owner = company.body.ownerKey;
+    const player = await json(`${server.url}/api/groups/${token}/players`, jsonPost({ name: 'Миша' }));
+    const snapshot = await json(`${server.url}/api/groups/${token}`);
+    assert.equal(snapshot.body.ownerKey, undefined);
+    assert.equal(JSON.stringify(snapshot.body).includes(owner), false);
+    const claim = await json(`${server.url}/api/groups/${token}/identity-claims`, jsonPost({ companyPlayerId: player.body.player.id, displayName: 'Михаил' }));
+    assert.equal(claim.status, 201);
+    assert.match(claim.body.claimKey, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims`)).status, 403);
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims`, { headers: { 'x-owner-key': token } })).status, 403);
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims`, { headers: { 'x-owner-key': owner } })).status, 200);
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims/${claim.body.claim.id}`)).status, 403);
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims/${claim.body.claim.id}`, { headers: { 'x-claim-key': claim.body.claimKey } })).body.claim.status, 'pending');
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims/${claim.body.claim.id}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' } })).status, 403);
+    const approved = await json(`${server.url}/api/groups/${token}/identity-claims/${claim.body.claim.id}/approve`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-owner-key': owner } });
+    assert.equal(approved.body.claim.status, 'approved');
+    assert.equal((await json(`${server.url}/api/groups/${token}/identity-claims/${claim.body.claim.id}`, { headers: { 'x-claim-key': claim.body.claimKey } })).body.claim.status, 'approved');
+    const stored = await readFile(file, 'utf8');
+    assert.equal(stored.includes(owner), false);
+    assert.equal(stored.includes(claim.body.claimKey), false);
+  } finally {
+    if (server) await stop(server.child);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('an oversized body does not poison the following requests', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'darts-oversized-'));
   const file = join(dir, 'store.json');

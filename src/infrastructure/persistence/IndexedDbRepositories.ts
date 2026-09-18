@@ -21,6 +21,7 @@ import type {
   CompetitiveRepository,
   BackupCompanyMatch,
 } from '../../application/ports/repositories';
+import type { PersonIdentity } from '../../domain/identities/PersonIdentity';
 import { emptyDraft, type VisitDraft } from '../../domain/match/VisitDraft';
 import { type DartThrow } from '../../domain/darts/DartThrow';
 import { isReachableThreeDartScore } from '../../domain/match/aggregateScore';
@@ -30,6 +31,27 @@ import { tabChannel } from '../TabChannel';
 
 const DB_NAME = 'dart-scorekeeper';
 export const DB_VERSION = 3;
+const isPersonIdentity = (value: unknown): value is PersonIdentity => {
+  if (
+    !isRecord(value) ||
+    !isString(value.id) ||
+    !isString(value.primaryLocalPlayerId) ||
+    !isString(value.createdAt) ||
+    !Array.isArray(value.links)
+  )
+    return false;
+  return value.links.every(
+    (link) =>
+      isRecord(link) &&
+      isString(link.companyToken) &&
+      isString(link.companyPlayerId) &&
+      isString(link.updatedAt) &&
+      ['pending', 'approved', 'rejected', 'revoked'].includes(String(link.verification)) &&
+      (link.claimId === undefined || isString(link.claimId)),
+  );
+};
+const isOwnerCredential = (value: unknown): value is { companyToken: string; ownerKey: string } =>
+  isRecord(value) && isString(value.companyToken) && isString(value.ownerKey);
 export const SUPPORTED_SCHEMA_VERSION = 3;
 export const BLOCKED_MESSAGE = 'Закройте другие вкладки приложения: они мешают обновить локальную базу данных.';
 export const BLOCKING_MESSAGE =
@@ -679,6 +701,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
       metaKeys,
       competitiveSessions,
       trainingSessions,
+      identities,
+      ownerCredentials,
     ] = await Promise.all([
       connected.getAll('players'),
       connected.getAll('matches'),
@@ -690,6 +714,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
       connected.getAllKeys('meta'),
       connected.getAll('competitiveSessions'),
       connected.getAll('trainingSessions'),
+      connected.get('meta', 'personIdentities'),
+      connected.get('meta', 'ownerCredentials'),
     ]);
     const migratedActive = active === undefined ? undefined : migrateActive(active);
     if (migratedActive !== undefined && !isActiveMatchEnvelope(migratedActive))
@@ -753,6 +779,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
       lastSetups,
       competitiveSessions: competitiveSessions.filter(isCompetitiveSession),
       trainingSessions: trainingSessions.filter(isTrainingSession),
+      identities: Array.isArray(identities) ? identities.filter(isPersonIdentity) : [],
+      ownerCredentials: Array.isArray(ownerCredentials) ? ownerCredentials.filter(isOwnerCredential) : [],
     };
   }
   async replaceAll(data: BackupData): Promise<void> {
@@ -793,6 +821,8 @@ export class IndexedDbBackupRepository implements BackupRepository {
     );
     const competitiveSessions = (data.competitiveSessions ?? []).filter(isCompetitiveSession);
     const trainingSessions = (data.trainingSessions ?? []).filter(isTrainingSession);
+    const identities = (data.identities ?? []).filter(isPersonIdentity);
+    const ownerCredentials = (data.ownerCredentials ?? []).filter(isOwnerCredential);
     const connected = await db();
     const transaction = connected.transaction(
       [
@@ -818,8 +848,12 @@ export class IndexedDbBackupRepository implements BackupRepository {
     await transaction.objectStore('trainingSessions').clear();
     const meta = transaction.objectStore('meta');
     await meta.delete('activeMatch');
+    await meta.delete('personIdentities');
+    await meta.delete('ownerCredentials');
     for (const key of await meta.getAllKeys()) if (String(key).startsWith('lastSetup:')) await meta.delete(key);
     await meta.put(structuredClone(data.settings), 'settings');
+    if (identities.length) await meta.put(structuredClone(identities), 'personIdentities');
+    if (ownerCredentials.length) await meta.put(structuredClone(ownerCredentials), 'ownerCredentials');
     for (const player of data.players) await transaction.objectStore('players').put(structuredClone(player));
     for (const match of matches as Match[]) await transaction.objectStore('matches').put(structuredClone(match));
     for (const company of companies)

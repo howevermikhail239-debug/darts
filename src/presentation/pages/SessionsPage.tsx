@@ -3,11 +3,16 @@ import type { CompetitiveRepository } from '../../application/ports/repositories
 import type { CompetitiveSession } from '../../domain/competitive/models';
 import type { Match, Player, PlayerId } from '../../domain/match/models';
 import { statisticsForPlayerHistory } from '../../domain/statistics/StatisticsCalculator';
-import { x01Analytics } from '../../domain/statistics/x01Analytics';
 import { ratingsForMatches } from '../../domain/competitive/rating';
 
-const titleFor = (session: CompetitiveSession) =>
-  session.title ?? `Игровая сессия · ${new Date(session.createdAt).toLocaleDateString('ru-RU')}`;
+const dateTitle = (date: string) => new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+const titleFor = (session: CompetitiveSession) => session.title ?? `Игровая сессия · ${dateTitle(session.createdAt)}`;
+const newTitle = (items: readonly CompetitiveSession[], at: string) => {
+  const base = `Игровая сессия · ${dateTitle(at)}`;
+  const count = items.filter((item) => titleFor(item).startsWith(base)).length + 1;
+  return count === 1 ? base : `${base}, ${count}`;
+};
+
 export function SessionsPage({
   players,
   matches,
@@ -27,26 +32,35 @@ export function SessionsPage({
 }) {
   const [sessions, setSessions] = useState<readonly CompetitiveSession[]>([]);
   const [selected, setSelected] = useState<readonly PlayerId[]>([]);
-  const [title, setTitle] = useState('');
+  const [rename, setRename] = useState<CompetitiveSession>();
+  const [name, setName] = useState('');
   useEffect(() => {
     void repository
       .listSessions()
       .then(setSessions)
       .catch(() => setSessions([]));
   }, [repository]);
-  const create = async () => {
+  const start = async () => {
     if (selected.length < 2) return;
+    const createdAt = now();
     const session: CompetitiveSession = {
       id: id(),
-      createdAt: now(),
-      ...(title.trim() ? { title: title.trim() } : {}),
+      createdAt,
+      title: newTitle(sessions, createdAt),
       playerIds: selected,
       matchIds: [],
     };
     await repository.saveSession(session);
-    setSessions((current) => [session, ...current]);
+    setSessions((items) => [session, ...items]);
     setSelected([]);
-    setTitle('');
+    onUse(session);
+  };
+  const saveRename = async () => {
+    if (!rename || !name.trim()) return;
+    const updated = { ...rename, title: name.trim() };
+    await repository.saveSession(updated);
+    setSessions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    setRename(undefined);
   };
   return (
     <main className="statistics-page sessions-page">
@@ -56,17 +70,13 @@ export function SessionsPage({
         </button>
         <div>
           <h1>Игровые сессии</h1>
-          <p>Объединяют обычные матчи одного вечера</p>
+          <p>Соберите матчи одного вечера в понятную историю</p>
         </div>
       </header>
-      <section className="stat-section">
-        <h2>Новая сессия</h2>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Например, Вечер 18 сентября"
-        />
-        <div className="stats-tabs compact">
+      <section className="stat-section session-start">
+        <h2>Начать игровую сессию</h2>
+        <p>Выберите участников — название и дата появятся автоматически.</p>
+        <div className="stats-tabs compact" aria-label="Участники сессии">
           {players.map((player) => (
             <button
               key={player.id}
@@ -74,7 +84,7 @@ export function SessionsPage({
               onClick={() =>
                 setSelected((current) =>
                   current.includes(player.id)
-                    ? current.filter((id) => id !== player.id)
+                    ? current.filter((item) => item !== player.id)
                     : current.length < 8
                       ? [...current, player.id]
                       : current,
@@ -85,10 +95,24 @@ export function SessionsPage({
             </button>
           ))}
         </div>
-        <button className="primary" disabled={selected.length < 2} onClick={() => void create().catch(() => undefined)}>
-          Начать сессию
+        <button className="primary" disabled={selected.length < 2} onClick={() => void start().catch(() => undefined)}>
+          Начать игровой вечер
         </button>
       </section>
+      {rename ? (
+        <section className="stat-section">
+          <h2>Изменить название</h2>
+          <input value={name} onChange={(event) => setName(event.target.value)} aria-label="Название сессии" />
+          <div className="training-actions">
+            <button className="secondary" onClick={() => setRename(undefined)}>
+              Отмена
+            </button>
+            <button className="primary" onClick={() => void saveRename().catch(() => undefined)}>
+              Сохранить
+            </button>
+          </div>
+        </section>
+      ) : null}
       {sessions.map((session) => (
         <SessionCard
           key={session.id}
@@ -96,34 +120,41 @@ export function SessionsPage({
           players={players}
           matches={matches}
           onUse={onUse}
+          onRename={() => {
+            setRename(session);
+            setName(titleFor(session));
+          }}
           onEnd={async () => {
             const ended = { ...session, endedAt: now() };
             await repository.saveSession(ended);
-            setSessions((current) => current.map((item) => (item.id === ended.id ? ended : item)));
+            setSessions((items) => items.map((item) => (item.id === ended.id ? ended : item)));
           }}
         />
       ))}
     </main>
   );
 }
+
 function SessionCard({
   session,
   players,
   matches,
   onUse,
+  onRename,
   onEnd,
 }: {
   session: CompetitiveSession;
   players: readonly Player[];
   matches: readonly Match[];
   onUse: (session: CompetitiveSession) => void;
+  onRename: () => void;
   onEnd: () => Promise<void>;
 }) {
   const sessionMatches = useMemo(
     () => matches.filter((match) => session.matchIds.includes(match.id)),
     [matches, session.matchIds],
   );
-  const ratingsBefore = useMemo(
+  const before = useMemo(
     () =>
       ratingsForMatches(
         matches.filter((match) => match.createdAt < session.createdAt),
@@ -131,7 +162,7 @@ function SessionCard({
       ),
     [matches, session.createdAt, session.playerIds],
   );
-  const ratingsAfter = useMemo(
+  const after = useMemo(
     () =>
       ratingsForMatches(
         [...matches.filter((match) => match.createdAt < session.createdAt), ...sessionMatches],
@@ -140,34 +171,51 @@ function SessionCard({
     [matches, session.createdAt, session.playerIds, sessionMatches],
   );
   return (
-    <section className="stat-section">
-      <h2>{titleFor(session)}</h2>
-      <p>
-        {session.endedAt ? 'Завершена' : 'Активна'} · матчей: {sessionMatches.length}
-      </p>
-      {session.playerIds.map((id) => {
-        const player = players.find((item) => item.id === id);
-        const stats = statisticsForPlayerHistory(sessionMatches, id, 'all', 'all');
-        const x01 = x01Analytics(sessionMatches, id);
-        const delta = (ratingsAfter.get(id)?.rating ?? 1500) - (ratingsBefore.get(id)?.rating ?? 1500);
-        return (
-          <p key={id}>
-            <strong>{player?.name ?? 'Игрок'}</strong> · {stats.wins}-{stats.losses}-{stats.draws} ·{' '}
-            {stats.winRate.toFixed(0)}% · Avg {stats.threeDartAverage.toFixed(1)} · лучший {stats.bestVisit} · checkout{' '}
-            {x01.highestCheckout || '—'} · рейтинг {delta >= 0 ? '+' : ''}
-            {delta}
+    <section className="stat-section session-card">
+      <div className="session-heading">
+        <div>
+          <h2>{titleFor(session)}</h2>
+          <p>
+            {dateTitle(session.createdAt)} · {session.endedAt ? 'завершена' : 'активна'} · {sessionMatches.length}{' '}
+            матчей
           </p>
-        );
-      })}
+        </div>
+        <button className="secondary" onClick={onRename}>
+          Изменить название
+        </button>
+      </div>
+      <p className="session-participants">
+        Участники:{' '}
+        {session.playerIds.map((id) => players.find((player) => player.id === id)?.name ?? 'Игрок').join(' · ')}
+      </p>
+      <div className="session-scoreboard">
+        {session.playerIds.map((playerId) => {
+          const stats = statisticsForPlayerHistory(sessionMatches, playerId, 'all', 'all');
+          const delta = (after.get(playerId)?.rating ?? 1500) - (before.get(playerId)?.rating ?? 1500);
+          return (
+            <div key={playerId}>
+              <strong>{players.find((player) => player.id === playerId)?.name ?? 'Игрок'}</strong>
+              <span>
+                {stats.wins}W · {stats.losses}L · {stats.draws}D
+              </span>
+              <span>
+                Рейтинг {before.get(playerId)?.rating ?? 1500} → {after.get(playerId)?.rating ?? 1500} (
+                {delta >= 0 ? '+' : ''}
+                {delta})
+              </span>
+            </div>
+          );
+        })}
+      </div>
       {!session.endedAt ? (
-        <>
+        <div className="training-actions">
           <button className="primary" onClick={() => onUse(session)}>
-            Играть в этой сессии
+            Следующий матч
           </button>
           <button className="secondary" onClick={() => void onEnd().catch(() => undefined)}>
-            Завершить игровую сессию
+            Завершить сессию
           </button>
-        </>
+        </div>
       ) : null}
     </section>
   );
