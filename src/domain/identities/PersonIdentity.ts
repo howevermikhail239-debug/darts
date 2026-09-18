@@ -19,7 +19,10 @@ export function deduplicateIdentityMatches(matches: readonly Match[]): readonly 
   const byId = new Map<string, Match>();
   for (const match of matches) {
     const current = byId.get(match.id);
-    if (!current || (match.completedAt ?? match.createdAt) > (current.completedAt ?? current.createdAt)) byId.set(match.id, match);
+    if (!current || (match.completedAt ?? match.createdAt) > (current.completedAt ?? current.createdAt))
+      byId.set(match.id, match);
   }
-  return [...byId.values()].sort((a, b) => (a.completedAt ?? a.createdAt).localeCompare(b.completedAt ?? b.createdAt) || a.id.localeCompare(b.id));
+  return [...byId.values()].sort(
+    (a, b) => (a.completedAt ?? a.createdAt).localeCompare(b.completedAt ?? b.createdAt) || a.id.localeCompare(b.id),
+  );
 }
