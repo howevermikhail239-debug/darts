@@ -660,7 +660,7 @@ test('a second match can reuse saved player ids, announces a real record and pro
   await expect(page.getByLabel('Среднее за 3 дротика', { exact: true })).toBeVisible();
 });
 
-test('comparison counts a multiplayer third-player winner as an other-player result', async ({ page }) => {
+test('comparison excludes a multiplayer result from direct head-to-head', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await createLocalProfile(page, 'Игрок 1');
@@ -674,8 +674,8 @@ test('comparison counts a multiplayer third-player winner as an other-player res
   await page.getByRole('button', { name: 'Статистика' }).click();
   await page.getByRole('button', { name: 'Сравнить игроков' }).click();
   await expect(page.getByRole('heading', { name: 'Личные встречи' })).toBeVisible();
-  await expect(page.getByText('Совместных матчей: 1')).toBeVisible();
-  await expect(page.getByText('Победы других игроков: 1')).toBeVisible();
+  await expect(page.getByText('Дуэлей: 0 · Ничьи: 0')).toBeVisible();
+  await expect(page.getByText('Матчи с 3+ игроками не входят в H2H: 1')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(
     true,
   );
@@ -989,7 +989,7 @@ test('stable local profile ids aggregate across matches and completed match open
     }
   }
 
-  await expect(page.getByText('Совместных матчей: 2')).toBeVisible();
+  await expect(page.getByText('Дуэлей: 2 · Ничьи: 0')).toBeVisible();
   await page.getByRole('button', { name: 'К игрокам' }).click();
   await expect(page.getByRole('button', { name: /Миша/ })).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Саша/ })).toHaveCount(1);
@@ -1190,7 +1190,7 @@ test('Stage 4.5.1 creates two persistent profiles in Setup and aggregates them t
   await expect(page.getByRole('heading', { name: 'Миша победил' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Статистика' }).click();
-  await expect(page.getByText('Совместных матчей: 1')).toBeVisible();
+  await expect(page.getByText('Дуэлей: 1 · Ничьи: 0')).toBeVisible();
   await page.getByRole('button', { name: 'К игрокам' }).click();
   await expect(page.getByRole('button', { name: /Миша/ })).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Саша/ })).toHaveCount(1);
@@ -1208,7 +1208,7 @@ test('Stage 4.5.1 creates two persistent profiles in Setup and aggregates them t
   await missVisit(page);
   await expect(page.getByRole('heading', { name: 'Саша победил' })).toBeVisible();
   await page.getByRole('button', { name: 'Статистика' }).click();
-  await expect(page.getByText('Совместных матчей: 2')).toBeVisible();
+  await expect(page.getByText('Дуэлей: 2 · Ничьи: 0')).toBeVisible();
   await page.getByRole('button', { name: 'К игрокам' }).click();
   await expect(page.getByRole('button', { name: /Миша/ })).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Саша/ })).toHaveCount(1);
