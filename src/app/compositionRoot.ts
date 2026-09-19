@@ -67,4 +67,6 @@ export const services = {
     );
   },
 };
-export const companySync = new CompanySync(sharedRepository, new HttpCompanyGateway());
+const companyGateway = new HttpCompanyGateway();
+export const companySync = new CompanySync(sharedRepository, companyGateway);
+export { companyGateway };

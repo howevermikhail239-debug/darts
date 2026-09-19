@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Match, Player, PlayerId } from './domain/match/models';
 import type { CompetitiveSession } from './domain/competitive/models';
-import { companySync, services } from './app/compositionRoot';
+import { companyGateway, companySync, services } from './app/compositionRoot';
 import { SetupPage } from './presentation/pages/SetupPage';
 import { GamePage } from './presentation/pages/GamePage';
 import { SettingsPage } from './presentation/pages/SettingsPage';
@@ -289,6 +289,12 @@ export default function App() {
           hapticsSupported={typeof navigator.vibrate === 'function'}
           hapticsEnabled={preferences.hapticsEnabled}
           onHaptics={preferences.setHapticsEnabled}
+          {...(company.company ? { companyToken: company.company.token } : {})}
+          onImportOwnerKey={async (key) => {
+            if (!company.company) throw new Error('Компания не выбрана.');
+            await companyGateway.ownerClaims(company.company.token, key);
+            await services.identities.saveOwnerKey(company.company.token, key);
+          }}
         />
       </>
     );

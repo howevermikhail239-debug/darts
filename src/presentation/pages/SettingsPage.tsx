@@ -15,6 +15,8 @@ type Props = {
   hapticsSupported: boolean;
   hapticsEnabled: boolean;
   onHaptics: (enabled: boolean) => Promise<void>;
+  companyToken?: string;
+  onImportOwnerKey?: (key: string) => Promise<void>;
 };
 
 export function SettingsPage({
@@ -28,6 +30,8 @@ export function SettingsPage({
   hapticsSupported,
   hapticsEnabled,
   onHaptics,
+  companyToken,
+  onImportOwnerKey,
 }: Props) {
   const file = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>();
@@ -49,6 +53,7 @@ export function SettingsPage({
       return next;
     });
   const [pending, setPending] = useState<{ kind: 'reset' | 'delete'; player: Player }>();
+  const [ownerKey, setOwnerKey] = useState('');
   const download = async () => {
     setBusy(true);
     try {
@@ -202,6 +207,40 @@ export function SettingsPage({
           </div>
         ) : null}
       </section>
+      {companyToken && onImportOwnerKey ? (
+        <section className="setup-form">
+          <h2>Управление компанией</h2>
+          <p>
+            Добавьте ключ владельца, если он был выпущен оператором для этой компании. Ключ проверяется сервером и не
+            показывается после сохранения.
+          </p>
+          <label>
+            Ключ владельца
+            <input
+              type="password"
+              value={ownerKey}
+              onChange={(event) => setOwnerKey(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <button
+            className="secondary"
+            disabled={!ownerKey.trim() || busy}
+            onClick={() => {
+              setBusy(true);
+              void onImportOwnerKey(ownerKey.trim())
+                .then(() => {
+                  setOwnerKey('');
+                  setMessage('Ключ владельца сохранён на этом устройстве.');
+                })
+                .catch((cause) => setMessage(userMessage(cause, 'Ключ владельца не подтверждён сервером.')))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Добавить ключ владельца
+          </button>
+        </section>
+      ) : null}
       <Dialog
         open={Boolean(restoreFile)}
         title="Восстановить данные?"
