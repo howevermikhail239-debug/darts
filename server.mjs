@@ -32,6 +32,7 @@ const QUOTA = {
   matchesPerGroup: number('DARTS_MAX_MATCHES_PER_GROUP', 5000),
   playersPerGroup: number('DARTS_MAX_PLAYERS_PER_GROUP', 200),
   groups: number('DARTS_MAX_GROUPS', 10000),
+  identityClaimsPerGroup: number('DARTS_MAX_IDENTITY_CLAIMS', 500),
 };
 
 /** Rate limits default to production values; the environment only narrows them for tests. */
@@ -491,6 +492,8 @@ const createClaim = async (req, res, context, token) => {
     const group = next.groups[tokenHash(token)];
     if (!own(group.players, body.companyPlayerId)) return { commit: false, value: undefined };
     group.identityClaims ??= {};
+    if (Object.keys(group.identityClaims).length >= QUOTA.identityClaimsPerGroup)
+      return { commit: false, value: 'too_many_claims' };
     group.identityClaims[id] = {
       id,
       companyPlayerId: body.companyPlayerId,
@@ -501,6 +504,7 @@ const createClaim = async (req, res, context, token) => {
     };
     return { value: group.identityClaims[id] };
   });
+  if (result === 'too_many_claims') return send(res, 409, { error: 'too_many_claims' });
   return result
     ? send(res, 201, { claim: publicClaim(result), claimKey: secret })
     : send(res, 404, { error: 'not_found' });
