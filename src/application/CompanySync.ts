@@ -75,7 +75,7 @@ export class CompanySync {
     await this.cache.savePlayers(token, mutate(await this.cache.players(token)));
   }
 
-  async create(name: string): Promise<{ company: SharedCompany; ownerKey: string }> {
+  async create(name: string): Promise<{ company: SharedCompany; ownerKey?: string }> {
     const created = await this.gateway.createCompany(name);
     const company = 'company' in created ? created.company : created;
     const ownerKey = 'ownerKey' in created ? created.ownerKey : undefined;
