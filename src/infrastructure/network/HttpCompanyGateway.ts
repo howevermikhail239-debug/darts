@@ -5,6 +5,7 @@ import {
   type CompanyGateway,
   type CompanySnapshot,
   type SharedCompany,
+  type CreatedCompany,
   type IdentityClaim,
 } from '../../application/ports/companyGateway';
 
@@ -128,10 +129,11 @@ const claim = (value: unknown): IdentityClaim => {
 };
 
 export class HttpCompanyGateway implements CompanyGateway {
-  async createCompany(name: string): Promise<SharedCompany> {
+  async createCompany(name: string): Promise<CreatedCompany> {
     const result = await request('/api/groups', { method: 'POST', body: JSON.stringify({ name }) });
-    if (!isRecord(result) || typeof result.token !== 'string') return invalidResponse();
-    return { token: result.token, ...companyFields(result.group) };
+    if (!isRecord(result) || typeof result.token !== 'string' || typeof result.ownerKey !== 'string')
+      return invalidResponse();
+    return { company: { token: result.token, ...companyFields(result.group) }, ownerKey: result.ownerKey };
   }
   /**
    * Одна плохая запись больше не делает компанию недоступной: матчи мигрируются и

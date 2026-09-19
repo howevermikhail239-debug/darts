@@ -1,5 +1,6 @@
 import type { Match, Player } from '../../domain/match/models';
 export type SharedCompany = Readonly<{ token: string; name: string; createdAt: string }>;
+export type CreatedCompany = Readonly<{ company: SharedCompany; ownerKey: string }>;
 export type CompanySnapshot = Readonly<{
   company: Omit<SharedCompany, 'token'>;
   players: readonly Player[];
@@ -43,7 +44,7 @@ export function failureReason(error: unknown): string {
 }
 
 export interface CompanyGateway {
-  createCompany(name: string): Promise<SharedCompany>;
+  createCompany(name: string): Promise<CreatedCompany | SharedCompany>;
   loadCompany(token: string): Promise<CompanySnapshot>;
   createPlayer(token: string, name: string): Promise<Player>;
   renamePlayer(token: string, playerId: string, name: string): Promise<Player>;

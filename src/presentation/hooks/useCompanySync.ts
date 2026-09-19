@@ -19,6 +19,7 @@ type SharedCache = Readonly<{
 type Dependencies = Readonly<{
   sync: CompanySync;
   cache: SharedCache;
+  saveOwnerKey?: (token: string, key: string) => Promise<void>;
 }>;
 
 const offlineNote = 'Нет связи. Матч сохранится и отправится позже.';
@@ -39,7 +40,7 @@ function replacePath(path: string): void {
 
 export const companyInviteLink = (token: string): string => `${location.origin}/g/${token}`;
 
-export function useCompanySync({ sync, cache }: Dependencies) {
+export function useCompanySync({ sync, cache, saveOwnerKey }: Dependencies) {
   const [activeToken, setActiveToken] = useState(tokenFromPath);
   const currentToken = useRef(activeToken);
   const generation = useRef(0);
@@ -175,7 +176,9 @@ export function useCompanySync({ sync, cache }: Dependencies) {
 
   const createCompany = useCallback(
     async (name: string) => {
-      const created = await sync.create(name);
+      const createdResult = await sync.create(name);
+      const created = createdResult.company;
+      if (createdResult.ownerKey) await saveOwnerKey?.(created.token, createdResult.ownerKey);
       generation.current += 1;
       currentToken.current = created.token;
       setCompany(created);
@@ -187,7 +190,7 @@ export function useCompanySync({ sync, cache }: Dependencies) {
       setCatalogRevision((value) => value + 1);
       replacePath(`/g/${created.token}`);
     },
-    [sync],
+    [saveOwnerKey, sync],
   );
 
   /**

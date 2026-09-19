@@ -75,10 +75,12 @@ export class CompanySync {
     await this.cache.savePlayers(token, mutate(await this.cache.players(token)));
   }
 
-  async create(name: string): Promise<SharedCompany> {
-    const company = await this.gateway.createCompany(name);
+  async create(name: string): Promise<{ company: SharedCompany; ownerKey: string }> {
+    const created = await this.gateway.createCompany(name);
+    const company = 'company' in created ? created.company : created;
+    const ownerKey = 'ownerKey' in created ? created.ownerKey : undefined;
     await this.enqueue(() => this.cache.saveCompany(company));
-    return company;
+    return { company, ...(ownerKey ? { ownerKey } : {}) };
   }
   async open(token: string): Promise<SharedCompany> {
     const result = await this.gateway.loadCompany(token);

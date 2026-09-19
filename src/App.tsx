@@ -96,7 +96,11 @@ export default function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const showGame = useCallback(() => show('game'), [show]);
   const showHome = useCallback(() => show('home'), [show]);
-  const company = useCompanySync({ sync: companySync, cache: services.shared });
+  const company = useCompanySync({
+    sync: companySync,
+    cache: services.shared,
+    saveOwnerKey: services.identities.saveOwnerKey.bind(services.identities),
+  });
   const preferences = usePreferences(services.settings);
   const match = useMatchSession({
     dependencies: services,
