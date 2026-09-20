@@ -43,6 +43,12 @@ export class CompanySync {
   private mutations: Promise<unknown> = Promise.resolve();
   private syncing: Promise<void> | undefined;
   private issues: SnapshotIssues | undefined;
+  private createdOwnerKey: string | undefined;
+  takeCreatedOwnerKey(): string | undefined {
+    const key = this.createdOwnerKey;
+    this.createdOwnerKey = undefined;
+    return key;
+  }
 
   /** Признак для интерфейса: сервер прислал записи, которые пришлось пропустить. */
   lastSnapshotIssues(): SnapshotIssues | undefined {
@@ -75,12 +81,13 @@ export class CompanySync {
     await this.cache.savePlayers(token, mutate(await this.cache.players(token)));
   }
 
-  async create(name: string): Promise<{ company: SharedCompany; ownerKey?: string }> {
+  async create(name: string): Promise<SharedCompany> {
     const created = await this.gateway.createCompany(name);
     const company = 'company' in created ? created.company : created;
     const ownerKey = 'ownerKey' in created ? created.ownerKey : undefined;
     await this.enqueue(() => this.cache.saveCompany(company));
-    return { company, ...(ownerKey ? { ownerKey } : {}) };
+    this.createdOwnerKey = ownerKey;
+    return company;
   }
   async open(token: string): Promise<SharedCompany> {
     const result = await this.gateway.loadCompany(token);

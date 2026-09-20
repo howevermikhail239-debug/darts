@@ -176,9 +176,9 @@ export function useCompanySync({ sync, cache, saveOwnerKey }: Dependencies) {
 
   const createCompany = useCallback(
     async (name: string) => {
-      const createdResult = await sync.create(name);
-      const created = createdResult.company;
-      if (createdResult.ownerKey) await saveOwnerKey?.(created.token, createdResult.ownerKey);
+      const created = await sync.create(name);
+      const ownerKey = sync.takeCreatedOwnerKey();
+      if (ownerKey) await saveOwnerKey?.(created.token, ownerKey);
       generation.current += 1;
       currentToken.current = created.token;
       setCompany(created);
