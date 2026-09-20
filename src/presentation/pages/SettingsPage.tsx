@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { useEffect } from 'react';
+import type { IdentityClaim } from '../../application/ports/companyGateway';
 import { Dialog } from '../components/Dialog';
 import type { Player } from '../../domain/match/models';
 import { userMessage } from '../errors/userMessage';
@@ -21,6 +23,8 @@ type Props = {
   localPlayers?: readonly Player[];
   identities?: readonly PersonIdentity[];
   onClaimProfile?: (companyPlayerId: string, localPlayer: Player) => Promise<void>;
+  loadOwnerClaims?: () => Promise<readonly IdentityClaim[]>;
+  onResolveClaim?: (claim: IdentityClaim, action: 'approve' | 'reject' | 'revoke') => Promise<void>;
 };
 
 export function SettingsPage({
@@ -39,6 +43,8 @@ export function SettingsPage({
   localPlayers = [],
   identities = [],
   onClaimProfile,
+  loadOwnerClaims,
+  onResolveClaim,
 }: Props) {
   const file = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>();
@@ -61,6 +67,13 @@ export function SettingsPage({
     });
   const [pending, setPending] = useState<{ kind: 'reset' | 'delete'; player: Player }>();
   const [ownerKey, setOwnerKey] = useState('');
+  const [ownerClaims, setOwnerClaims] = useState<readonly IdentityClaim[]>();
+  useEffect(() => {
+    if (loadOwnerClaims)
+      void loadOwnerClaims()
+        .then(setOwnerClaims)
+        .catch(() => setOwnerClaims(undefined));
+  }, [loadOwnerClaims]);
   const download = async () => {
     setBusy(true);
     try {
@@ -291,6 +304,48 @@ export function SettingsPage({
               </article>
             );
           })}
+        </section>
+      ) : null}
+      {ownerClaims && onResolveClaim ? (
+        <section className="setup-form">
+          <h2>Запросы на связь профилей</h2>
+          {ownerClaims.length ? (
+            ownerClaims.map((claim) => (
+              <article className="profile-management-card" key={claim.id}>
+                <b>{players.find((player) => player.id === claim.companyPlayerId)?.name ?? 'Игрок'}</b>
+                <p>
+                  {claim.displayName} · {new Date(claim.createdAt).toLocaleDateString('ru-RU')} · {claim.status}
+                </p>
+                <div className="training-actions">
+                  {claim.status === 'pending' ? (
+                    <>
+                      <button
+                        className="primary"
+                        onClick={() => void onResolveClaim(claim, 'approve').then(() => setOwnerClaims(undefined))}
+                      >
+                        Подтвердить
+                      </button>
+                      <button
+                        className="secondary"
+                        onClick={() => void onResolveClaim(claim, 'reject').then(() => setOwnerClaims(undefined))}
+                      >
+                        Отклонить
+                      </button>
+                    </>
+                  ) : claim.status === 'approved' ? (
+                    <button
+                      className="secondary"
+                      onClick={() => void onResolveClaim(claim, 'revoke').then(() => setOwnerClaims(undefined))}
+                    >
+                      Отозвать связь
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))
+          ) : (
+            <p>Запросов пока нет.</p>
+          )}
         </section>
       ) : null}
       <Dialog

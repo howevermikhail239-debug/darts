@@ -118,6 +118,7 @@ export default function App() {
   const today = useMemo(() => summarizeToday(data.history, persistentIds, new Date()), [persistentIds, data.history]);
   const activeSessionMatch = (match.active ?? match.resume)?.snapshot.match;
   const matchInProgress = activeSessionMatch?.status === 'in_progress';
+  const companyToken = company.company?.token;
 
   useEffect(() => services.onStorageNotice((notice) => setStorageNotice(notice.message)), []);
   useEffect(() => {
@@ -297,7 +298,7 @@ export default function App() {
           hapticsSupported={typeof navigator.vibrate === 'function'}
           hapticsEnabled={preferences.hapticsEnabled}
           onHaptics={preferences.setHapticsEnabled}
-          {...(company.company ? { companyToken: company.company.token } : {})}
+          {...(companyToken ? { companyToken } : {})}
           onImportOwnerKey={async (key) => {
             if (!company.company) throw new Error('Компания не выбрана.');
             await companyGateway.ownerClaims(company.company.token, key);
@@ -315,6 +316,23 @@ export default function App() {
             );
             setIdentities((items) => [...items.filter((item) => item.id !== identity.id), identity]);
           }}
+          {...(companyToken
+            ? {
+                loadOwnerClaims: async () => {
+                  const key = await services.identities.ownerKey(companyToken);
+                  if (!key) throw new Error('Ключ владельца не сохранён.');
+                  return companyGateway.ownerClaims(companyToken, key);
+                },
+                onResolveClaim: async (
+                  claim: import('./application/ports/companyGateway').IdentityClaim,
+                  action: 'approve' | 'reject' | 'revoke',
+                ) => {
+                  const key = await services.identities.ownerKey(companyToken);
+                  if (!key) throw new Error('Ключ владельца не сохранён.');
+                  await companyGateway.resolveIdentityClaim(companyToken, claim.id, key, action);
+                },
+              }
+            : {})}
         />
       </>
     );
