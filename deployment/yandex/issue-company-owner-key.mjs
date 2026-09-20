@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global process, console */
 /* Operator-only legacy owner bootstrap. Reads the invite token from stdin, never argv or logs. */
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, rename, writeFile } from 'node:fs/promises';

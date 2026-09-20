@@ -321,13 +321,21 @@ export function SettingsPage({
                     <>
                       <button
                         className="primary"
-                        onClick={() => void onResolveClaim(claim, 'approve').then(() => setOwnerClaims(undefined))}
+                        onClick={() =>
+                          void onResolveClaim(claim, 'approve')
+                            .then(() => setOwnerClaims(undefined))
+                            .catch((cause) => setMessage(userMessage(cause, 'Не удалось подтвердить запрос.')))
+                        }
                       >
                         Подтвердить
                       </button>
                       <button
                         className="secondary"
-                        onClick={() => void onResolveClaim(claim, 'reject').then(() => setOwnerClaims(undefined))}
+                        onClick={() =>
+                          void onResolveClaim(claim, 'reject')
+                            .then(() => setOwnerClaims(undefined))
+                            .catch((cause) => setMessage(userMessage(cause, 'Не удалось отклонить запрос.')))
+                        }
                       >
                         Отклонить
                       </button>
@@ -335,7 +343,11 @@ export function SettingsPage({
                   ) : claim.status === 'approved' ? (
                     <button
                       className="secondary"
-                      onClick={() => void onResolveClaim(claim, 'revoke').then(() => setOwnerClaims(undefined))}
+                      onClick={() =>
+                        void onResolveClaim(claim, 'revoke')
+                          .then(() => setOwnerClaims(undefined))
+                          .catch((cause) => setMessage(userMessage(cause, 'Не удалось отозвать связь.')))
+                      }
                     >
                       Отозвать связь
                     </button>
