@@ -774,6 +774,7 @@ function GameModeSelector({
             <div className="segments three">
               <button
                 type="button"
+                aria-label="Любым попаданием"
                 className={outRule === 'straight' ? 'selected' : ''}
                 onClick={() => onOutRule('straight')}
               >
@@ -781,6 +782,7 @@ function GameModeSelector({
               </button>
               <button
                 type="button"
+                aria-label="Удвоением"
                 className={outRule === 'double' ? 'selected' : ''}
                 onClick={() => onOutRule('double')}
               >
@@ -788,6 +790,7 @@ function GameModeSelector({
               </button>
               <button
                 type="button"
+                aria-label="Master out"
                 className={outRule === 'master' ? 'selected' : ''}
                 onClick={() => onOutRule('master')}
               >
