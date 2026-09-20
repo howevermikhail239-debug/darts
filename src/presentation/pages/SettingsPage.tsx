@@ -3,6 +3,7 @@ import { Dialog } from '../components/Dialog';
 import type { Player } from '../../domain/match/models';
 import { userMessage } from '../errors/userMessage';
 import { PlayerIdentity } from '../components/PlayerIdentity';
+import type { PersonIdentity } from '../../domain/identities/PersonIdentity';
 
 type Props = {
   players: readonly Player[];
@@ -17,6 +18,9 @@ type Props = {
   onHaptics: (enabled: boolean) => Promise<void>;
   companyToken?: string;
   onImportOwnerKey?: (key: string) => Promise<void>;
+  localPlayers?: readonly Player[];
+  identities?: readonly PersonIdentity[];
+  onClaimProfile?: (companyPlayerId: string, localPlayer: Player) => Promise<void>;
 };
 
 export function SettingsPage({
@@ -32,6 +36,9 @@ export function SettingsPage({
   onHaptics,
   companyToken,
   onImportOwnerKey,
+  localPlayers = [],
+  identities = [],
+  onClaimProfile,
 }: Props) {
   const file = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string>();
@@ -239,6 +246,51 @@ export function SettingsPage({
           >
             Добавить ключ владельца
           </button>
+        </section>
+      ) : null}
+      {companyToken && onClaimProfile ? (
+        <section className="setup-form">
+          <h2>Мои связи профилей</h2>
+          <p>После подтверждения владельцем статистика будет доступна вместе. Матчи и профили не объединяются.</p>
+          {players.map((companyPlayer) => {
+            const link = identities
+              .flatMap((identity) => identity.links.map((item) => ({ identity, item })))
+              .find(({ item }) => item.companyToken === companyToken && item.companyPlayerId === companyPlayer.id);
+            return (
+              <article key={companyPlayer.id} className="profile-management-card">
+                <b>{companyPlayer.name}</b>
+                {link ? (
+                  <p>
+                    {link.item.verification === 'pending'
+                      ? 'Ожидает подтверждения владельцем компании'
+                      : link.item.verification === 'approved'
+                        ? `Связан с профилем ${localPlayers.find((player) => player.id === link.identity.primaryLocalPlayerId)?.name ?? 'игроком'} · подтверждено владельцем`
+                        : link.item.verification === 'rejected'
+                          ? 'Владелец отклонил запрос'
+                          : 'Связь была отозвана владельцем'}
+                  </p>
+                ) : (
+                  <select
+                    defaultValue=""
+                    onChange={(event) => {
+                      const local = localPlayers.find((player) => player.id === event.target.value);
+                      if (local)
+                        void onClaimProfile(companyPlayer.id, local)
+                          .then(() => setMessage('Запрос отправлен владельцу.'))
+                          .catch((cause) => setMessage(userMessage(cause, 'Не удалось отправить запрос.')));
+                    }}
+                  >
+                    <option value="">Связать с моим профилем…</option>
+                    {localPlayers.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </article>
+            );
+          })}
         </section>
       ) : null}
       <Dialog

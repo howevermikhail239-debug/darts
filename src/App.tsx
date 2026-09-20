@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Match, Player, PlayerId } from './domain/match/models';
 import type { CompetitiveSession } from './domain/competitive/models';
-import { companyGateway, companySync, services } from './app/compositionRoot';
+import type { PersonIdentity } from './domain/identities/PersonIdentity';
+import { companyGateway, companySync, identityLinks, services } from './app/compositionRoot';
 import { SetupPage } from './presentation/pages/SetupPage';
 import { GamePage } from './presentation/pages/GamePage';
 import { SettingsPage } from './presentation/pages/SettingsPage';
@@ -86,6 +87,7 @@ export default function App() {
   const { screen, show, replace } = useScreenHistory();
   const [statisticsContext, setStatisticsContext] = useState<readonly PlayerId[]>([]);
   const [competitiveSession, setCompetitiveSession] = useState<CompetitiveSession>();
+  const [identities, setIdentities] = useState<readonly PersonIdentity[]>([]);
   const [confirmResumeAbandon, setConfirmResumeAbandon] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [wipeCounts, setWipeCounts] = useState<LocalDataCounts>();
@@ -118,6 +120,12 @@ export default function App() {
   const matchInProgress = activeSessionMatch?.status === 'in_progress';
 
   useEffect(() => services.onStorageNotice((notice) => setStorageNotice(notice.message)), []);
+  useEffect(() => {
+    void services.identities
+      .listIdentities()
+      .then(setIdentities)
+      .catch(() => setIdentities([]));
+  }, []);
 
   // CLI-1: аппаратная кнопка «Назад» может увести с экрана игры — сохраняем матч
   // как возобновляемый ровно так же, как это делает кнопка «‹» в шапке.
@@ -294,6 +302,18 @@ export default function App() {
             if (!company.company) throw new Error('Компания не выбрана.');
             await companyGateway.ownerClaims(company.company.token, key);
             await services.identities.saveOwnerKey(company.company.token, key);
+          }}
+          localPlayers={match.players}
+          identities={identities}
+          onClaimProfile={async (companyPlayerId, localPlayer) => {
+            if (!company.company) throw new Error('Компания не выбрана.');
+            const identity = await identityLinks.claim(
+              company.company.token,
+              companyPlayerId,
+              localPlayer.id,
+              localPlayer.name,
+            );
+            setIdentities((items) => [...items.filter((item) => item.id !== identity.id), identity]);
           }}
         />
       </>

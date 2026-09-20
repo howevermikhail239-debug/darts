@@ -5,6 +5,8 @@ export type IdentityLink = Readonly<{
   companyPlayerId: string;
   verification: 'pending' | 'approved' | 'rejected' | 'revoked';
   claimId?: string;
+  /** Capability is local-only and is never included in server snapshots. */
+  claimKey?: string;
   updatedAt: string;
 }>;
 export type PersonIdentity = Readonly<{

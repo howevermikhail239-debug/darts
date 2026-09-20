@@ -48,7 +48,8 @@ const isPersonIdentity = (value: unknown): value is PersonIdentity => {
       isString(link.companyPlayerId) &&
       isString(link.updatedAt) &&
       ['pending', 'approved', 'rejected', 'revoked'].includes(String(link.verification)) &&
-      (link.claimId === undefined || isString(link.claimId)),
+      (link.claimId === undefined || isString(link.claimId)) &&
+      (link.claimKey === undefined || isString(link.claimKey)),
   );
 };
 const isOwnerCredential = (value: unknown): value is { companyToken: string; ownerKey: string } =>

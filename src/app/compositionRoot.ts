@@ -13,6 +13,7 @@ import {
 import { startMatch } from '../application/StartMatch';
 import { exportBackup, restoreBackup } from '../application/BackupService';
 import { CompanySync } from '../application/CompanySync';
+import { IdentityLinks } from '../application/IdentityLinks';
 import { HttpCompanyGateway } from '../infrastructure/network/HttpCompanyGateway';
 
 const matches = new IndexedDbMatchRepository();
@@ -69,4 +70,5 @@ export const services = {
 };
 const companyGateway = new HttpCompanyGateway();
 export const companySync = new CompanySync(sharedRepository, companyGateway);
+export const identityLinks = new IdentityLinks(identities, companyGateway, id, now);
 export { companyGateway };
